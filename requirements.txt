@@ -1,0 +1,6 @@
+# PHASE 1 dependencies (visual environment + navigation only).
+# Audio/ML libraries (e.g. librosa, numpy, music21, pretty_midi) will be
+# added starting from FAZA 2 / FAZA 3, once real functionality begins.
+
+kivy>=2.3.0
+kivymd>=1.2.0
