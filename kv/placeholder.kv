@@ -1,0 +1,101 @@
+#:kivy 2.2.0
+# -----------------------------------------------------------------------
+# placeholder.kv
+# Shared layout for every secondary screen (Recorder, Audio Import,
+# Sheet Music, MIDI, Recordings, Settings) in PHASE 1.
+# Each screen only swaps its icon / title / subtitle text -- the visual
+# language (background, top bar, glass card, badge) stays identical so
+# the whole app feels like one cohesive product from day one.
+# Real functionality is wired in later phases.
+# -----------------------------------------------------------------------
+
+<PlaceholderScreen>:
+    FloatLayout:
+        Image:
+            source: app.cfg.MAIN_BACKGROUND
+            allow_stretch: True
+            keep_ratio: False
+            size: self.parent.size
+            pos: self.parent.pos
+
+        MDBoxLayout:
+            orientation: "vertical"
+            size: self.parent.size
+            pos: self.parent.pos
+
+            TopBar:
+                IconButton:
+                    source: app.cfg.icon("back.png")
+                    size: dp(38), dp(38)
+                    pos_hint: {"center_y": 0.5}
+                    on_release: app.go_back()
+
+                MDLabel:
+                    text: root.title_text
+                    font_style: "H6"
+                    bold: True
+                    theme_text_color: "Custom"
+                    text_color: 0.97, 0.98, 1, 1
+                    valign: "middle"
+
+                Widget:
+                    size_hint_x: None
+                    width: dp(38)
+
+            FloatLayout:
+                GlassCard:
+                    orientation: "vertical"
+                    padding: dp(30)
+                    spacing: dp(16)
+                    size_hint: None, None
+                    size: dp(300), dp(320)
+                    pos_hint: {"center_x": 0.5, "center_y": 0.55}
+
+                    FloatLayout:
+                        size_hint_y: None
+                        height: dp(96)
+                        Image:
+                            source: root.icon_source
+                            size: dp(96), dp(96)
+                            pos_hint: {"center_x": 0.5, "center_y": 0.5}
+                            allow_stretch: True
+                            keep_ratio: True
+
+                    MDLabel:
+                        text: root.title_text
+                        font_style: "H5"
+                        bold: True
+                        halign: "center"
+                        theme_text_color: "Custom"
+                        text_color: 0.97, 0.98, 1, 1
+                        size_hint_y: None
+                        height: self.texture_size[1]
+
+                    MDLabel:
+                        text: root.subtitle_text
+                        font_style: "Body2"
+                        halign: "center"
+                        theme_text_color: "Custom"
+                        text_color: 0.72, 0.73, 0.88, 1
+                        size_hint_y: None
+                        height: self.texture_size[1] + dp(6)
+
+                    MDBoxLayout:
+                        size_hint: None, None
+                        size: dp(190), dp(34)
+                        pos_hint: {"center_x": 0.5}
+                        canvas.before:
+                            Color:
+                                rgba: 0.486, 0.302, 1, 0.16
+                            RoundedRectangle:
+                                pos: self.pos
+                                size: self.size
+                                radius: [17,]
+
+                        MDLabel:
+                            text: root.phase_note
+                            font_style: "Caption"
+                            bold: True
+                            halign: "center"
+                            theme_text_color: "Custom"
+                            text_color: 0.78, 0.66, 1, 1

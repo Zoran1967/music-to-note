@@ -1,1 +1,61 @@
+#:kivy 2.2.0
+# -----------------------------------------------------------------------
+# theme.kv
+# Shared, reusable visual language for the whole app: glass cards,
+# glowing PNG icon buttons, section headers, top bars.
+# Every screen builds on these primitives so the whole app feels like
+# one consistent, premium "design system" instead of mixed styles.
+# -----------------------------------------------------------------------
 
+# A tappable image-based icon button (our icons are custom PNGs, not glyphs)
+<IconButton@ButtonBehavior+Image>:
+    size_hint: None, None
+    allow_stretch: True
+    keep_ratio: True
+    opacity: 0.55 if self.state == "down" else 1.0
+
+
+# Base frosted-glass card used everywhere (cards, panels, bars)
+<GlassCard@MDCard>:
+    md_bg_color: 0.098, 0.09, 0.188, 0.55
+    radius: [26, 26, 26, 26]
+    elevation: 0
+    line_color: 1, 1, 1, 0.09
+    canvas.after:
+        Color:
+            rgba: 1, 1, 1, 0.09
+        Line:
+            rounded_rectangle: (self.x, self.y, self.width, self.height, 26)
+            width: 1.1
+
+
+# Tappable variant of GlassCard used for the home-screen feature grid
+<ActionCard@ButtonBehavior+GlassCard>:
+    md_bg_color: (0.145, 0.125, 0.26, 0.72) if self.state == "down" else (0.098, 0.09, 0.188, 0.55)
+    padding: dp(18)
+    spacing: dp(10)
+
+
+# Small top navigation bar with a back button + screen title, shared by
+# every secondary (placeholder) screen for a consistent feel.
+<TopBar@MDBoxLayout>:
+    size_hint_y: None
+    height: dp(64)
+    padding: dp(12), dp(8)
+    spacing: dp(12)
+    canvas.before:
+        Color:
+            rgba: 0.06, 0.055, 0.12, 0.55
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [0, 0, dp(22), dp(22)]
+
+
+<SectionLabel@MDLabel>:
+    font_style: "Subtitle1"
+    bold: True
+    theme_text_color: "Custom"
+    text_color: 0.96, 0.97, 1, 1
+    size_hint_y: None
+    height: self.texture_size[1]
