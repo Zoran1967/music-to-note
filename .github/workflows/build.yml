@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  PIP_CONSTRAINT: ${{ github.workspace }}/pip-constraints.txt
+
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -17,6 +20,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Pin a stable pip version everywhere
+        run: echo "pip==24.0" > pip-constraints.txt
 
       - name: Install system dependencies
         run: |
