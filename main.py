@@ -13,35 +13,27 @@ This build contains ONLY the visual environment and navigation of the
 app: theme, background, icon set, home screen, and placeholder screens
 for every planned feature. There is intentionally NO audio capture, NO
 signal analysis, and NO database logic yet -- those arrive in later,
-clearly separated phases (see the module docstrings inside audio/,
-transcription/, and database/ for what is planned there).
+clearly separated phases.
+
+DIAGNOSTIC MODE:
+If anything fails while building the real UI, this file catches the
+error and shows the full Python traceback directly on the phone screen
+(scrollable, selectable-looking text) instead of silently crashing to
+a black screen. This lets us fix real Android-only bugs without needing
+a USB/adb connection -- just take a photo of the on-screen error.
 
 Run with (desktop, for design preview):
     python3 main.py
-
-Package for Android later with Buildozer once functionality is added.
 """
 
 import os
+import sys
+import traceback
 
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 from kivy.lang import Builder
 from kivy.utils import platform
-
-from kivymd.app import MDApp
-from kivymd.uix.screenmanager import MDScreenManager
-from kivy.uix.screenmanager import SlideTransition
-
-import config as cfg
-from screens.home import HomeScreen
-from screens.recorder import RecorderScreen
-from screens.audio_import import AudioImportScreen
-from screens.sheet_music import SheetMusicScreen
-from screens.midi import MidiScreen
-from screens.recordings import RecordingsScreen
-from screens.settings import SettingsScreen
-
 
 # A comfortable portrait preview size when running on desktop during
 # design/review. Only applied on desktop platforms -- on Android the OS
@@ -51,67 +43,125 @@ if platform not in ("android", "ios"):
         Window.size = (390, 780)
 
 
+def _build_real_app(app):
+    """Everything that could realistically break lives in here, wrapped
+    by build() below so a failure shows on-screen instead of crashing."""
+    import config as cfg
+    from kivymd.uix.screenmanager import MDScreenManager
+    from kivy.uix.screenmanager import SlideTransition
+
+    from screens.home import HomeScreen
+    from screens.recorder import RecorderScreen
+    from screens.audio_import import AudioImportScreen
+    from screens.sheet_music import SheetMusicScreen
+    from screens.midi import MidiScreen
+    from screens.recordings import RecordingsScreen
+    from screens.settings import SettingsScreen
+
+    app.cfg = cfg
+    app.title = cfg.APP_NAME
+
+    LabelBase.register(
+        name="Poppins",
+        fn_regular=cfg.FONT_REGULAR,
+        fn_bold=cfg.FONT_BOLD,
+    )
+    try:
+        for style_name in ("H5", "H6", "Subtitle1", "Body2", "Caption"):
+            app.theme_cls.font_styles[style_name][0] = "Poppins"
+    except (KeyError, TypeError, IndexError):
+        pass
+
+    app.theme_cls.theme_style = "Dark"
+    app.theme_cls.primary_palette = "DeepPurple"
+    app.theme_cls.accent_palette = "Cyan"
+
+    Builder.load_file(os.path.join(cfg.KV_DIR, "theme.kv"))
+    Builder.load_file(os.path.join(cfg.KV_DIR, "placeholder.kv"))
+    Builder.load_file(os.path.join(cfg.KV_DIR, "home.kv"))
+
+    sm = MDScreenManager()
+    sm.transition = SlideTransition(duration=0.22)
+
+    sm.add_widget(HomeScreen(name=cfg.Routes.HOME))
+    sm.add_widget(RecorderScreen(name=cfg.Routes.RECORDER))
+    sm.add_widget(AudioImportScreen(name=cfg.Routes.AUDIO_IMPORT))
+    sm.add_widget(SheetMusicScreen(name=cfg.Routes.SHEET_MUSIC))
+    sm.add_widget(MidiScreen(name=cfg.Routes.MIDI))
+    sm.add_widget(RecordingsScreen(name=cfg.Routes.RECORDINGS))
+    sm.add_widget(SettingsScreen(name=cfg.Routes.SETTINGS))
+
+    sm.current = cfg.Routes.HOME
+    app.sm = sm
+    return sm
+
+
+def _build_error_screen(error_text):
+    """Plain-Kivy (no KivyMD dependency) scrollable error screen so it
+    works even if KivyMD itself is what failed to load."""
+    from kivy.uix.scrollview import ScrollView
+    from kivy.uix.label import Label
+    from kivy.uix.boxlayout import BoxLayout
+    from kivy.core.window import Window as _Win
+
+    _Win.clearcolor = (0.05, 0.05, 0.08, 1)
+
+    root = BoxLayout(orientation="vertical", padding=20, spacing=10)
+    title = Label(
+        text="[b]Music -> Note -- GRESKA PRI POKRETANJU[/b]\n"
+             "(uslikaj ovaj ekran i posalji)",
+        markup=True,
+        size_hint_y=None,
+        height=90,
+        color=(1, 0.4, 0.4, 1),
+        halign="center",
+    )
+    root.add_widget(title)
+
+    scroll = ScrollView()
+    label = Label(
+        text=error_text,
+        size_hint_y=None,
+        text_size=(_Win.width - 40, None),
+        color=(0.9, 0.9, 0.95, 1),
+        halign="left",
+        valign="top",
+        font_size=13,
+    )
+    label.bind(texture_size=lambda inst, val: setattr(label, "height", val[1]))
+    scroll.add_widget(label)
+    root.add_widget(scroll)
+    return root
+
+
+from kivymd.app import MDApp
+
+
 class MusicToNoteApp(MDApp):
     """Root application class for Music -> Note."""
 
-    # Exposed to every KV file as `app.cfg` so screens can reach paths,
-    # colors and copy without hard-coding strings all over the UI.
-    cfg = cfg
-
     def build(self):
-        self.title = cfg.APP_NAME
-
-        # Register the custom Poppins family for a premium, consistent
-        # typographic feel across the whole app.
-        LabelBase.register(
-            name="Poppins",
-            fn_regular=cfg.FONT_REGULAR,
-            fn_bold=cfg.FONT_BOLD,
-        )
-        # Defensive: KivyMD's internal font_styles structure has changed
-        # across versions. If this ever fails, fall back to the default
-        # theme font rather than crashing the whole app on startup.
         try:
-            for style_name in ("H5", "H6", "Subtitle1", "Body2", "Caption"):
-                self.theme_cls.font_styles[style_name][0] = "Poppins"
-        except (KeyError, TypeError, IndexError):
-            pass
+            return _build_real_app(self)
+        except Exception:
+            err = traceback.format_exc()
+            print("=" * 60)
+            print("MUSIC TO NOTE STARTUP ERROR:")
+            print(err)
+            print("=" * 60)
+            return _build_error_screen(err)
 
-        self.theme_cls.theme_style = "Dark"
-        self.theme_cls.primary_palette = "DeepPurple"
-        self.theme_cls.accent_palette = "Cyan"
-
-        # Load the shared design-system KV files before any screen KV,
-        # so <GlassCard>, <ActionCard>, <IconButton>, <TopBar> exist
-        # by the time home.kv / placeholder.kv reference them.
-        Builder.load_file(os.path.join(cfg.KV_DIR, "theme.kv"))
-        Builder.load_file(os.path.join(cfg.KV_DIR, "placeholder.kv"))
-        Builder.load_file(os.path.join(cfg.KV_DIR, "home.kv"))
-
-        self.sm = MDScreenManager()
-        self.sm.transition = SlideTransition(duration=0.22)
-
-        self.sm.add_widget(HomeScreen(name=cfg.Routes.HOME))
-        self.sm.add_widget(RecorderScreen(name=cfg.Routes.RECORDER))
-        self.sm.add_widget(AudioImportScreen(name=cfg.Routes.AUDIO_IMPORT))
-        self.sm.add_widget(SheetMusicScreen(name=cfg.Routes.SHEET_MUSIC))
-        self.sm.add_widget(MidiScreen(name=cfg.Routes.MIDI))
-        self.sm.add_widget(RecordingsScreen(name=cfg.Routes.RECORDINGS))
-        self.sm.add_widget(SettingsScreen(name=cfg.Routes.SETTINGS))
-
-        self.sm.current = cfg.Routes.HOME
-        return self.sm
-
-    # -- Simple, shared navigation helpers used from every KV file ------
     def go_to(self, route_name: str):
-        if self.sm.current == route_name:
+        if not hasattr(self, "sm") or self.sm.current == route_name:
             return
         self.sm.transition.direction = "left"
         self.sm.current = route_name
 
     def go_back(self):
+        if not hasattr(self, "sm"):
+            return
         self.sm.transition.direction = "right"
-        self.sm.current = cfg.Routes.HOME
+        self.sm.current = self.cfg.Routes.HOME
 
 
 if __name__ == "__main__":
