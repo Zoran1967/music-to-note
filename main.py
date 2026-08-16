@@ -27,6 +27,7 @@ import os
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 from kivy.lang import Builder
+from kivy.utils import platform
 
 from kivymd.app import MDApp
 from kivymd.uix.screenmanager import MDScreenManager
@@ -43,10 +44,11 @@ from screens.settings import SettingsScreen
 
 
 # A comfortable portrait preview size when running on desktop during
-# design/review. This has no effect on the real Android build, where
-# the OS controls the window size.
-if os.environ.get("MTN_DESKTOP_PREVIEW", "1") == "1":
-    Window.size = (390, 780)
+# design/review. Only applied on desktop platforms -- on Android the OS
+# controls the window size and this must never run there.
+if platform not in ("android", "ios"):
+    if os.environ.get("MTN_DESKTOP_PREVIEW", "1") == "1":
+        Window.size = (390, 780)
 
 
 class MusicToNoteApp(MDApp):
@@ -66,11 +68,14 @@ class MusicToNoteApp(MDApp):
             fn_regular=cfg.FONT_REGULAR,
             fn_bold=cfg.FONT_BOLD,
         )
-        self.theme_cls.font_styles["H5"][0] = "Poppins"
-        self.theme_cls.font_styles["H6"][0] = "Poppins"
-        self.theme_cls.font_styles["Subtitle1"][0] = "Poppins"
-        self.theme_cls.font_styles["Body2"][0] = "Poppins"
-        self.theme_cls.font_styles["Caption"][0] = "Poppins"
+        # Defensive: KivyMD's internal font_styles structure has changed
+        # across versions. If this ever fails, fall back to the default
+        # theme font rather than crashing the whole app on startup.
+        try:
+            for style_name in ("H5", "H6", "Subtitle1", "Body2", "Caption"):
+                self.theme_cls.font_styles[style_name][0] = "Poppins"
+        except (KeyError, TypeError, IndexError):
+            pass
 
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "DeepPurple"
