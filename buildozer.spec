@@ -10,7 +10,7 @@ version = 0.1.0-phase1
 
 # PHASE 1: only UI/navigation deps. Audio + AI libraries are added from
 # FAZA 2/3 onward (e.g. numpy, librosa, music21, pretty_midi).
-requirements = python3,kivy,kivymd
+requirements = python3==3.11.9,kivy,kivymd
 
 orientation = portrait
 fullscreen = 0
