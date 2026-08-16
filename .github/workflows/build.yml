@@ -18,19 +18,19 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Force python3 to be 3.11 system-wide
-        run: |
-          PY311=$(which python3.11)
-          echo "Using: $PY311"
-          sudo ln -sf "$PY311" /usr/bin/python3
-          python3 --version
-
       - name: Install system dependencies
         run: |
           sudo apt update
           sudo apt install -y git zip unzip openjdk-17-jdk python3-pip \
             autoconf libtool pkg-config zlib1g-dev libncurses5-dev \
             libncursesw5-dev cmake libffi-dev libssl-dev build-essential
+
+      - name: Force python3 to be 3.11 system-wide
+        run: |
+          PY311=$(which python3.11)
+          echo "Using: $PY311"
+          sudo ln -sf "$PY311" /usr/bin/python3
+          python3 --version
 
       - name: Install buildozer and cython
         run: |
