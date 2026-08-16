@@ -1,0 +1,214 @@
+#:kivy 2.2.0
+# -----------------------------------------------------------------------
+# home.kv -- main / landing screen.
+# Big central hero visual + 6 feature cards (mic, import, sheet music,
+# midi, recordings, settings). Phase 1: navigation only, no real logic.
+# -----------------------------------------------------------------------
+
+<HomeScreen>:
+    FloatLayout:
+        Image:
+            source: app.cfg.MAIN_BACKGROUND
+            allow_stretch: True
+            keep_ratio: False
+            size: self.parent.size
+            pos: self.parent.pos
+
+        ScrollView:
+            do_scroll_x: False
+            bar_width: 0
+
+            MDBoxLayout:
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                padding: dp(22), dp(28), dp(22), dp(34)
+                spacing: dp(20)
+
+                # ---- Top row: app mark + name ----------------------------
+                MDLabel:
+                    text: "[b]MUSIC[/b]  \u2192  [b]NOTE[/b]"
+                    markup: True
+                    font_style: "H6"
+                    theme_text_color: "Custom"
+                    text_color: 0.96, 0.97, 1, 1
+                    size_hint_y: None
+                    height: self.texture_size[1]
+
+                MDLabel:
+                    text: app.cfg.APP_TAGLINE
+                    font_style: "Body2"
+                    theme_text_color: "Custom"
+                    text_color: 0.72, 0.73, 0.86, 1
+                    size_hint_y: None
+                    height: self.texture_size[1]
+
+                # ---- Hero visual: big central music/analysis emblem ------
+                FloatLayout:
+                    size_hint_y: None
+                    height: dp(280)
+
+                    Image:
+                        source: app.cfg.HERO_VISUAL
+                        size: dp(280), dp(280)
+                        pos_hint: {"center_x": 0.5, "center_y": 0.5}
+                        allow_stretch: True
+                        keep_ratio: True
+
+                MDLabel:
+                    text: "Dodirni mikrofon da sluša\u0161, ili u\u010ditaj audio fajl"
+                    font_style: "Caption"
+                    halign: "center"
+                    theme_text_color: "Custom"
+                    text_color: 0.68, 0.70, 0.86, 1
+                    size_hint_y: None
+                    height: self.texture_size[1]
+
+                # ---- Primary actions: record + import, side by side ------
+                MDBoxLayout:
+                    orientation: "horizontal"
+                    size_hint_y: None
+                    height: dp(140)
+                    spacing: dp(16)
+
+                    ActionCard:
+                        orientation: "vertical"
+                        on_release: app.go_to("recorder")
+                        IconButton:
+                            source: app.cfg.icon("microphone.png")
+                            size: dp(52), dp(52)
+                        MDLabel:
+                            text: "Snimi muziku"
+                            font_style: "Subtitle1"
+                            bold: True
+                            theme_text_color: "Custom"
+                            text_color: 0.97, 0.98, 1, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
+                        MDLabel:
+                            text: "Preko mikrofona"
+                            font_style: "Caption"
+                            theme_text_color: "Custom"
+                            text_color: 0.70, 0.72, 0.88, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
+
+                    ActionCard:
+                        orientation: "vertical"
+                        on_release: app.go_to("audio_import")
+                        IconButton:
+                            source: app.cfg.icon("audio.png")
+                            size: dp(52), dp(52)
+                        MDLabel:
+                            text: "U\u010ditaj audio"
+                            font_style: "Subtitle1"
+                            bold: True
+                            theme_text_color: "Custom"
+                            text_color: 0.97, 0.98, 1, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
+                        MDLabel:
+                            text: "MP3 / WAV fajl"
+                            font_style: "Caption"
+                            theme_text_color: "Custom"
+                            text_color: 0.70, 0.72, 0.88, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
+
+                # ---- Secondary grid: sheet music / midi / recordings /
+                #      settings -- 2x2, same visual weight -----------------
+                MDGridLayout:
+                    cols: 2
+                    spacing: dp(16)
+                    size_hint_y: None
+                    height: self.minimum_height
+                    row_default_height: dp(140)
+                    row_force_default: True
+
+                    ActionCard:
+                        orientation: "vertical"
+                        on_release: app.go_to("sheet_music")
+                        IconButton:
+                            source: app.cfg.icon("sheet_music.png")
+                            size: dp(46), dp(46)
+                        MDLabel:
+                            text: "Notni zapis"
+                            font_style: "Subtitle1"
+                            bold: True
+                            theme_text_color: "Custom"
+                            text_color: 0.97, 0.98, 1, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
+                        MDLabel:
+                            text: "Rezultati transkripcije"
+                            font_style: "Caption"
+                            theme_text_color: "Custom"
+                            text_color: 0.70, 0.72, 0.88, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
+
+                    ActionCard:
+                        orientation: "vertical"
+                        on_release: app.go_to("midi")
+                        IconButton:
+                            source: app.cfg.icon("midi.png")
+                            size: dp(46), dp(46)
+                        MDLabel:
+                            text: "MIDI"
+                            font_style: "Subtitle1"
+                            bold: True
+                            theme_text_color: "Custom"
+                            text_color: 0.97, 0.98, 1, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
+                        MDLabel:
+                            text: "Rad sa MIDI zapisom"
+                            font_style: "Caption"
+                            theme_text_color: "Custom"
+                            text_color: 0.70, 0.72, 0.88, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
+
+                    ActionCard:
+                        orientation: "vertical"
+                        on_release: app.go_to("recordings")
+                        IconButton:
+                            source: app.cfg.icon("recordings.png")
+                            size: dp(46), dp(46)
+                        MDLabel:
+                            text: "Moji zapisi"
+                            font_style: "Subtitle1"
+                            bold: True
+                            theme_text_color: "Custom"
+                            text_color: 0.97, 0.98, 1, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
+                        MDLabel:
+                            text: "Istorija transkripcija"
+                            font_style: "Caption"
+                            theme_text_color: "Custom"
+                            text_color: 0.70, 0.72, 0.88, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
+
+                    ActionCard:
+                        orientation: "vertical"
+                        on_release: app.go_to("settings")
+                        IconButton:
+                            source: app.cfg.icon("settings.png")
+                            size: dp(46), dp(46)
+                        MDLabel:
+                            text: "Pode\u0161avanja"
+                            font_style: "Subtitle1"
+                            bold: True
+                            theme_text_color: "Custom"
+                            text_color: 0.97, 0.98, 1, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
+                        MDLabel:
+                            text: "Podesi aplikaciju"
+                            font_style: "Caption"
+                            theme_text_color: "Custom"
+                            text_color: 0.70, 0.72, 0.88, 1
+                            size_hint_y: None
+                            height: self.texture_size[1]
