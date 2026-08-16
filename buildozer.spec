@@ -6,7 +6,7 @@ package.domain = org.musictonote
 source.dir = .
 source.include_exts = py,png,jpg,kv,ttf,atlas
 
-version = 0.1.0-phase1
+version = 0.1.0
 
 # PHASE 1: only UI/navigation deps. Audio + AI libraries are added from
 # FAZA 2/3 onward (e.g. numpy, librosa, music21, pretty_midi).
