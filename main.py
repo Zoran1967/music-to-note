@@ -7,27 +7,21 @@ Music -> Note
 A modern Android app that listens to music (microphone or audio file)
 and turns it into sheet music / MIDI.
 
-PHASE 1 OF DEVELOPMENT
-=======================
-This build contains ONLY the visual environment and navigation of the
-app: theme, background, icon set, home screen, and placeholder screens
-for every planned feature. There is intentionally NO audio capture, NO
-signal analysis, and NO database logic yet -- those arrive in later,
-clearly separated phases.
+FAZA 1: visual environment, theme, navigation -- DONE.
+FAZA 2: real microphone recording + real audio file import -- ACTIVE.
+FAZA 3+: audio analysis, sheet music, MIDI export -- still placeholders.
 
 DIAGNOSTIC MODE:
 If anything fails while building the real UI, this file catches the
 error and shows the full Python traceback directly on the phone screen
-(scrollable, selectable-looking text) instead of silently crashing to
-a black screen. This lets us fix real Android-only bugs without needing
-a USB/adb connection -- just take a photo of the on-screen error.
+instead of silently crashing to a black screen. This stays in the code
+for the entire life of the project, per project strategy.
 
 Run with (desktop, for design preview):
     python3 main.py
 """
 
 import os
-import sys
 import traceback
 
 from kivy.core.window import Window
@@ -35,9 +29,6 @@ from kivy.core.text import LabelBase
 from kivy.lang import Builder
 from kivy.utils import platform
 
-# A comfortable portrait preview size when running on desktop during
-# design/review. Only applied on desktop platforms -- on Android the OS
-# controls the window size and this must never run there.
 if platform not in ("android", "ios"):
     if os.environ.get("MTN_DESKTOP_PREVIEW", "1") == "1":
         Window.size = (390, 780)
@@ -67,7 +58,7 @@ def _build_real_app(app):
         fn_bold=cfg.FONT_BOLD,
     )
     try:
-        for style_name in ("H5", "H6", "Subtitle1", "Body2", "Caption"):
+        for style_name in ("H4", "H5", "H6", "Subtitle1", "Body2", "Caption"):
             app.theme_cls.font_styles[style_name][0] = "Poppins"
     except (KeyError, TypeError, IndexError):
         pass
@@ -79,6 +70,8 @@ def _build_real_app(app):
     Builder.load_file(os.path.join(cfg.KV_DIR, "theme.kv"))
     Builder.load_file(os.path.join(cfg.KV_DIR, "placeholder.kv"))
     Builder.load_file(os.path.join(cfg.KV_DIR, "home.kv"))
+    Builder.load_file(os.path.join(cfg.KV_DIR, "recorder.kv"))
+    Builder.load_file(os.path.join(cfg.KV_DIR, "audio_import.kv"))
 
     sm = MDScreenManager()
     sm.transition = SlideTransition(duration=0.22)
