@@ -6,11 +6,11 @@ package.domain = org.musictonote
 source.dir = .
 source.include_exts = py,png,jpg,kv,ttf,atlas
 
-version = 0.1.0
+version = 0.2.0
 
-# PHASE 1: only UI/navigation deps. Audio + AI libraries are added from
-# FAZA 2/3 onward (e.g. numpy, librosa, music21, pretty_midi).
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy,kivymd==1.2.0
+# FAZA 2: added pyjnius (direct Android MediaRecorder access for mic
+# recording) and plyer (native file picker for audio import).
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy,kivymd==1.2.0,pyjnius,plyer
 
 orientation = portrait
 fullscreen = 0
