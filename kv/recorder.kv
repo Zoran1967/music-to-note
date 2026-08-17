@@ -1,0 +1,81 @@
+#:kivy 2.2.0
+# -----------------------------------------------------------------------
+# recorder.kv -- FAZA 2: real microphone recording screen.
+# Big tappable mic/stop button, live timer, and status text.
+# -----------------------------------------------------------------------
+
+<RecorderScreen>:
+    FloatLayout:
+        Image:
+            source: app.cfg.MAIN_BACKGROUND
+            allow_stretch: True
+            keep_ratio: False
+            size: self.parent.size
+            pos: self.parent.pos
+
+        MDBoxLayout:
+            orientation: "vertical"
+            size: self.parent.size
+            pos: self.parent.pos
+
+            TopBar:
+                IconButton:
+                    source: app.cfg.icon("back.png")
+                    size: dp(38), dp(38)
+                    pos_hint: {"center_y": 0.5}
+                    on_release: app.go_back()
+
+                MDLabel:
+                    text: "Snimi muziku"
+                    font_style: "H6"
+                    bold: True
+                    theme_text_color: "Custom"
+                    text_color: 0.97, 0.98, 1, 1
+                    valign: "middle"
+
+                Widget:
+                    size_hint_x: None
+                    width: dp(38)
+
+            FloatLayout:
+                GlassCard:
+                    orientation: "vertical"
+                    padding: dp(30)
+                    spacing: dp(18)
+                    size_hint: None, None
+                    size: dp(300), dp(340)
+                    pos_hint: {"center_x": 0.5, "center_y": 0.55}
+
+                    IconButton:
+                        source: root.mic_icon
+                        size: dp(110), dp(110)
+                        pos_hint: {"center_x": 0.5}
+                        on_release: root.toggle_record()
+
+                    MDLabel:
+                        text: root.timer_text
+                        font_style: "H4"
+                        bold: True
+                        halign: "center"
+                        theme_text_color: "Custom"
+                        text_color: 0.97, 0.98, 1, 1
+                        size_hint_y: None
+                        height: self.texture_size[1]
+
+                    MDLabel:
+                        text: root.status_text
+                        font_style: "Body2"
+                        halign: "center"
+                        theme_text_color: "Custom"
+                        text_color: 0.72, 0.73, 0.88, 1
+                        size_hint_y: None
+                        height: self.texture_size[1] + dp(6)
+
+                    MDLabel:
+                        text: "Dodirni mikrofon da zapo\u010dne\u0161 / zaustavi\u0161 snimanje"
+                        font_style: "Caption"
+                        halign: "center"
+                        theme_text_color: "Custom"
+                        text_color: 0.60, 0.62, 0.78, 1
+                        size_hint_y: None
+                        height: self.texture_size[1]
