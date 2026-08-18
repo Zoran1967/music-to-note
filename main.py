@@ -72,6 +72,7 @@ def _build_real_app(app):
     Builder.load_file(os.path.join(cfg.KV_DIR, "home.kv"))
     Builder.load_file(os.path.join(cfg.KV_DIR, "recorder.kv"))
     Builder.load_file(os.path.join(cfg.KV_DIR, "audio_import.kv"))
+    Builder.load_file(os.path.join(cfg.KV_DIR, "recordings.kv"))
 
     sm = MDScreenManager()
     sm.transition = SlideTransition(duration=0.22)
