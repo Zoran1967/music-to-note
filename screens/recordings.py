@@ -59,7 +59,7 @@ class RecordingsScreen(MDScreen):
         try:
             entries = []
             entries += self._collect(_app_dir("recordings"), (".m4a",), "Snimljeno")
-            entries += self._collect(
+                        entries += self._collect(
                 _app_dir("imported"), (".mp3", ".wav"), "Ucitano"
             )
             entries.sort(key=lambda e: e[2], reverse=True)  # newest first
