@@ -1,4 +1,4 @@
-#:kivy 2.2.0
+kivy 2.2.0
 # -----------------------------------------------------------------------
 # audio_import.kv -- FAZA 2: real audio file import screen.
 # Tap the icon to open the native file picker (MP3 / WAV).
@@ -48,6 +48,7 @@
 
                     IconButton:
                         source: root.file_icon
+                        size_hint: None, None
                         size: dp(96), dp(96)
                         pos_hint: {"center_x": 0.5}
                         on_release: root.choose_file()
