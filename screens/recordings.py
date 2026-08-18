@@ -2,12 +2,12 @@
 """
 screens/recordings.py
 
-FAZA 2: Real recordings list + in-app playback + delete.
+FAZA 2: Real recordings + imported audio list, in-app playback, delete.
 
-Recordings are saved to the app's own private storage (getFilesDir()),
-invisible to normal file manager apps by design (avoids Android
-scoped-storage/permission headaches). The user sees a simple list here
-and can tap play to listen, or tap X to delete a recording.
+Shows BOTH microphone recordings (getFilesDir()/recordings, .m4a) AND
+imported audio files (getFilesDir()/imported, .mp3 / .wav) in one
+combined, newest-first list, so there's a single place to find and
+play anything the user has captured or brought into the app.
 
 Every risky step is wrapped in try/except and reported directly in the
 list (as a message row) rather than crashing, per project strategy.
@@ -21,12 +21,12 @@ from kivymd.uix.label import MDLabel
 from kivymd.uix.screen import MDScreen
 
 
-def _recordings_dir():
+def _app_dir(subfolder):
     from jnius import autoclass
 
     PythonActivity = autoclass("org.kivy.android.PythonActivity")
     context = PythonActivity.mActivity
-    return os.path.join(context.getFilesDir().getAbsolutePath(), "recordings")
+    return os.path.join(context.getFilesDir().getAbsolutePath(), subfolder)
 
 
 class RecordingsScreen(MDScreen):
@@ -51,40 +51,47 @@ class RecordingsScreen(MDScreen):
         if platform != "android":
             container.add_widget(
                 self._make_message(
-                    "Rad sa snimcima dostupan je samo na Android uredjaju"
+                    "Rad sa zapisima dostupan je samo na Android uredjaju"
                 )
             )
             return
 
         try:
-            rec_dir = _recordings_dir()
-            if not os.path.isdir(rec_dir):
-                container.add_widget(self._make_message("Jos uvek nemas nijedan snimak"))
-                return
-
-            files = [f for f in os.listdir(rec_dir) if f.lower().endswith(".m4a")]
-            files.sort(
-                key=lambda f: os.path.getmtime(os.path.join(rec_dir, f)),
-                reverse=True,
+            entries = []
+            entries += self._collect(_app_dir("recordings"), (".m4a",), "Snimljeno")
+            entries += self._collect(
+                _app_dir("imported"), (".mp3", ".wav"), "Ucitano"
             )
+            entries.sort(key=lambda e: e[2], reverse=True)  # newest first
 
-            if not files:
-                container.add_widget(self._make_message("Jos uvek nemas nijedan snimak"))
+            if not entries:
+                container.add_widget(
+                    self._make_message("Jos uvek nemas nijedan zapis")
+                )
                 return
 
-            for fname in files:
-                full_path = os.path.join(rec_dir, fname)
-                self._add_row(container, fname, full_path)
+            for full_path, fname, _mtime, label in entries:
+                self._add_row(container, fname, full_path, label)
         except Exception as e:
             container.add_widget(
                 self._make_message("Greska pri ucitavanju liste: {}".format(e))
             )
 
-    def _add_row(self, container, fname, full_path):
+    def _collect(self, folder, extensions, label):
+        results = []
+        if os.path.isdir(folder):
+            for fname in os.listdir(folder):
+                if fname.lower().endswith(extensions):
+                    full_path = os.path.join(folder, fname)
+                    mtime = os.path.getmtime(full_path)
+                    results.append((full_path, fname, mtime, label))
+        return results
+
+    def _add_row(self, container, fname, full_path, label):
         size_kb = os.path.getsize(full_path) // 1024
         row = Factory.RecordingRow()
         row.filename = fname
-        row.subtitle = "{} KB".format(size_kb)
+        row.subtitle = "{} \u2014 {} KB".format(label, size_kb)
         row.ids.play_btn.bind(
             on_release=lambda inst, p=full_path: self.play_recording(p)
         )
@@ -144,7 +151,7 @@ class RecordingsScreen(MDScreen):
                 container.remove_widget(row_widget)
                 if not container.children:
                     container.add_widget(
-                        self._make_message("Jos uvek nemas nijedan snimak")
+                        self._make_message("Jos uvek nemas nijedan zapis")
                     )
         except Exception as e:
             container = self.ids.get("list_container")
