@@ -4,13 +4,15 @@ screens/audio_import.py
 
 FAZA 2: Real audio file import (MP3 / WAV).
 
-Uses plyer.filechooser (standard, well-supported package for native
-file pickers) to let the user pick a file, then copies it into the
-app's own private storage so later phases (analysis, transcription)
-always know exactly where to find it.
+Uses plyer.filechooser (native file picker), then copies the picked
+file into the app's own private storage so later phases (analysis,
+transcription) always know exactly where to find it.
 
-Every risky step is wrapped in try/except and reported in status_text
-on screen, per project strategy -- never fail silently or crash.
+NOTE: we deliberately do NOT pass a `filters` argument to
+filechooser.open_file() -- plyer's filter format is inconsistent
+across platforms and was causing the picker to return None instead of
+a real path. Instead we accept any file and check the extension
+ourselves after the user picks one, which is more robust.
 """
 
 import os
@@ -35,10 +37,7 @@ class AudioImportScreen(MDScreen):
         try:
             from plyer import filechooser
 
-            filechooser.open_file(
-                on_selection=self._on_file_selected,
-                filters=[("Audio fajlovi", "*.mp3", "*.wav")],
-            )
+            filechooser.open_file(on_selection=self._on_file_selected)
         except Exception as e:
             self.status_text = "Greska pri otvaranju biraca fajlova: {}".format(e)
 
@@ -48,10 +47,22 @@ class AudioImportScreen(MDScreen):
         Clock.schedule_once(lambda dt: self._handle_selection(selection))
 
     def _handle_selection(self, selection):
-        if not selection:
+        if not selection or not selection[0]:
             self.status_text = "Nije izabran fajl"
             return
+
         src_path = selection[0]
+        if not isinstance(src_path, str):
+            self.status_text = "Neocekivan format izabranog fajla"
+            return
+
+        ext = os.path.splitext(src_path)[1].lower()
+        if ext not in (".mp3", ".wav"):
+            self.status_text = "Izaberi MP3 ili WAV fajl (izabrano: {})".format(
+                ext or "nepoznat format"
+            )
+            return
+
         try:
             from jnius import autoclass
 
