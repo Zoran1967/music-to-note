@@ -62,7 +62,7 @@ class RecordingsScreen(MDScreen):
                 container.add_widget(self._make_message("Jos uvek nemas nijedan snimak"))
                 return
 
-            files = [f for f in os.listdir(rec_dir) if f.lower().endswith(".3gp")]
+            files = [f for f in os.listdir(rec_dir) if f.lower().endswith(".m4a")]
             files.sort(
                 key=lambda f: os.path.getmtime(os.path.join(rec_dir, f)),
                 reverse=True,
