@@ -2,13 +2,12 @@
 """
 screens/recordings.py
 
-FAZA 2: Real recordings list + in-app playback.
+FAZA 2: Real recordings list + in-app playback + delete.
 
 Recordings are saved to the app's own private storage (getFilesDir()),
-which is invisible to normal file manager apps by design (avoids
-Android scoped-storage/permission headaches). Instead of hunting for
-the file on the phone, the user sees a simple list here and taps a row
-to play it back immediately, using Android's MediaPlayer via pyjnius.
+invisible to normal file manager apps by design (avoids Android
+scoped-storage/permission headaches). The user sees a simple list here
+and can tap play to listen, or tap X to delete a recording.
 
 Every risky step is wrapped in try/except and reported directly in the
 list (as a message row) rather than crashing, per project strategy.
@@ -75,16 +74,24 @@ class RecordingsScreen(MDScreen):
 
             for fname in files:
                 full_path = os.path.join(rec_dir, fname)
-                size_kb = os.path.getsize(full_path) // 1024
-                row = Factory.RecordingRow()
-                row.filename = fname
-                row.subtitle = "{} KB \u2014 dodirni za reprodukciju".format(size_kb)
-                row.bind(on_release=lambda inst, p=full_path: self.play_recording(p))
-                container.add_widget(row)
+                self._add_row(container, fname, full_path)
         except Exception as e:
             container.add_widget(
                 self._make_message("Greska pri ucitavanju liste: {}".format(e))
             )
+
+    def _add_row(self, container, fname, full_path):
+        size_kb = os.path.getsize(full_path) // 1024
+        row = Factory.RecordingRow()
+        row.filename = fname
+        row.subtitle = "{} KB".format(size_kb)
+        row.ids.play_btn.bind(
+            on_release=lambda inst, p=full_path: self.play_recording(p)
+        )
+        row.ids.delete_btn.bind(
+            on_release=lambda inst, p=full_path, r=row: self.delete_recording(p, r)
+        )
+        container.add_widget(row)
 
     def _make_message(self, text):
         return MDLabel(
@@ -125,3 +132,23 @@ class RecordingsScreen(MDScreen):
             except Exception:
                 pass
             self._player = None
+
+    # -- Delete --------------------------------------------------
+    def delete_recording(self, path, row_widget):
+        try:
+            self._stop_playback()
+            if os.path.exists(path):
+                os.remove(path)
+            container = self.ids.get("list_container")
+            if container is not None and row_widget in container.children:
+                container.remove_widget(row_widget)
+                if not container.children:
+                    container.add_widget(
+                        self._make_message("Jos uvek nemas nijedan snimak")
+                    )
+        except Exception as e:
+            container = self.ids.get("list_container")
+            if container is not None:
+                container.add_widget(
+                    self._make_message("Greska pri brisanju: {}".format(e))
+                )
