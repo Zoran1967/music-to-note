@@ -1,0 +1,92 @@
+#:kivy 2.2.0
+# -----------------------------------------------------------------------
+# recordings.kv -- FAZA 2: list saved recordings, tap a row to play it
+# directly inside the app (no need to hunt for the file on the phone).
+# -----------------------------------------------------------------------
+
+<RecordingRow@ButtonBehavior+MDBoxLayout>:
+    orientation: "horizontal"
+    size_hint_y: None
+    height: dp(64)
+    padding: dp(14), dp(8)
+    spacing: dp(12)
+    filename: ""
+    subtitle: ""
+    canvas.before:
+        Color:
+            rgba: (0.145, 0.125, 0.26, 0.72) if self.state == "down" else (0.098, 0.09, 0.188, 0.55)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [16,]
+
+    IconButton:
+        source: app.cfg.icon("play.png")
+        size: dp(34), dp(34)
+        pos_hint: {"center_y": 0.5}
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDLabel:
+            text: root.filename
+            font_style: "Body2"
+            bold: True
+            theme_text_color: "Custom"
+            text_color: 0.97, 0.98, 1, 1
+            size_hint_y: None
+            height: self.texture_size[1]
+
+        MDLabel:
+            text: root.subtitle
+            font_style: "Caption"
+            theme_text_color: "Custom"
+            text_color: 0.70, 0.72, 0.88, 1
+            size_hint_y: None
+            height: self.texture_size[1]
+
+
+<RecordingsScreen>:
+    FloatLayout:
+        Image:
+            source: app.cfg.MAIN_BACKGROUND
+            allow_stretch: True
+            keep_ratio: False
+            size: self.parent.size
+            pos: self.parent.pos
+
+        MDBoxLayout:
+            orientation: "vertical"
+            size: self.parent.size
+            pos: self.parent.pos
+
+            TopBar:
+                IconButton:
+                    source: app.cfg.icon("back.png")
+                    size: dp(38), dp(38)
+                    pos_hint: {"center_y": 0.5}
+                    on_release: app.go_back()
+
+                MDLabel:
+                    text: "Moji zapisi"
+                    font_style: "H6"
+                    bold: True
+                    theme_text_color: "Custom"
+                    text_color: 0.97, 0.98, 1, 1
+                    valign: "middle"
+
+                IconButton:
+                    source: app.cfg.icon("recordings.png")
+                    size: dp(30), dp(30)
+                    pos_hint: {"center_y": 0.5}
+                    on_release: root.refresh_list()
+
+            ScrollView:
+                do_scroll_x: False
+                MDBoxLayout:
+                    id: list_container
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: self.minimum_height
+                    padding: dp(16)
+                    spacing: dp(10)
