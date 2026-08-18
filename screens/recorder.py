@@ -15,6 +15,9 @@ Strategy (agreed and locked in project memory):
 - Saves to the app's own private storage (getFilesDir()) so we don't
   need broad external-storage permissions or deal with scoped-storage
   headaches in this phase.
+- Uses MPEG_4 container + AAC encoder (.m4a) -- NOT 3GP/AMR_NB, which
+  proved unreliable (MediaPlayer "Prepare failed: status=0x1" on
+  playback, especially for short recordings).
 """
 
 import os
@@ -106,13 +109,15 @@ class RecorderScreen(MDScreen):
                 context.getFilesDir().getAbsolutePath(), "recordings"
             )
             os.makedirs(rec_dir, exist_ok=True)
-            filename = "recording_{}.3gp".format(int(time.time()))
+            filename = "recording_{}.m4a".format(int(time.time()))
             self._output_path = os.path.join(rec_dir, filename)
 
             recorder = MediaRecorder()
             recorder.setAudioSource(AudioSource.MIC)
-            recorder.setOutputFormat(OutputFormat.THREE_GPP)
-            recorder.setAudioEncoder(AudioEncoder.AMR_NB)
+            recorder.setOutputFormat(OutputFormat.MPEG_4)
+            recorder.setAudioEncoder(AudioEncoder.AAC)
+            recorder.setAudioEncodingBitRate(128000)
+            recorder.setAudioSamplingRate(44100)
             recorder.setOutputFile(self._output_path)
             recorder.prepare()
             recorder.start()
@@ -133,6 +138,9 @@ class RecorderScreen(MDScreen):
         self.timer_text = "{:02d}:{:02d}".format(m, s)
 
     def stop_recording(self):
+        recorded_seconds = 0
+        if self._start_time is not None:
+            recorded_seconds = time.time() - self._start_time
         try:
             if self._recorder is not None:
                 self._recorder.stop()
@@ -140,13 +148,24 @@ class RecorderScreen(MDScreen):
                 self._recorder = None
         except Exception as e:
             self.status_text = "Greska pri zaustavljanju: {}".format(e)
+            self._output_path = None
         finally:
             if self._clock_event is not None:
                 self._clock_event.cancel()
                 self._clock_event = None
             self.is_recording = False
             self.mic_icon = icon("microphone.png")
-            if self._output_path and os.path.exists(self._output_path):
+
+            if recorded_seconds < 0.6 and self._output_path:
+                # Too short to produce a valid, playable file -- discard it
+                # instead of leaving a broken 0-second recording behind.
+                try:
+                    if os.path.exists(self._output_path):
+                        os.remove(self._output_path)
+                except Exception:
+                    pass
+                self.status_text = "Snimak prekratak, pokusaj ponovo (drzi due)"
+            elif self._output_path and os.path.exists(self._output_path):
                 size_kb = os.path.getsize(self._output_path) // 1024
                 self.status_text = "Sacuvano: {} ({} KB)".format(
                     os.path.basename(self._output_path), size_kb
