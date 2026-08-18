@@ -2,7 +2,7 @@
 """
 screens/audio_import.py
 
-FAZA 2: Real audio file import (MP3 / WAV).
+FAZA 2: Real audio file import (MP3 / WAV / M4A / AAC / OGG / FLAC).
 
 STRATEGY NOTE: we do NOT use plyer.filechooser here. It has a known,
 long-standing, unresolved bug on Android where picking a file through
@@ -29,7 +29,7 @@ REQUEST_CODE_PICK_AUDIO = 9001
 
 
 class AudioImportScreen(MDScreen):
-    status_text = StringProperty("Izaberi MP3 ili WAV fajl")
+    status_text = StringProperty("Izaberi audio fajl (MP3, WAV, M4A...)")
     file_icon = StringProperty(icon("audio.png"))
 
     def choose_file(self):
@@ -106,8 +106,8 @@ class AudioImportScreen(MDScreen):
                 pass
 
             ext = os.path.splitext(display_name)[1].lower()
-            if ext not in (".mp3", ".wav"):
-                self.status_text = "Izaberi MP3 ili WAV fajl (izabrano: {})".format(
+            if ext not in (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"):
+                self.status_text = "Izaberi audio fajl (izabrano: {})".format(
                     display_name
                 )
                 return
