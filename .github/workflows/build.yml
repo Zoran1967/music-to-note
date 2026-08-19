@@ -1,3 +1,13 @@
+# ... (početak vašeg fajla sa 'on' i 'branches')
+
+env:
+  PIP_CONSTRAINT: ${{ github.workspace }}/pip-constraints.txt
+  BUILDOZER_WARN_ON_ROOT: 0
+
+jobs:
+  build:
+# ... (ostatak koda ostaje nepromenjen)
+
 name: Build Android APK
 
 on:
