@@ -2,19 +2,21 @@
 """
 screens/recordings.py
 
-FAZA 2: Real recordings + imported audio list, in-app playback, delete.
+FAZA 2/3: Recordings + imported audio list, in-app playback, delete,
+and (FAZA 3, WAV recordings only) pure-Python pitch/note analysis.
 
-Shows BOTH microphone recordings (getFilesDir()/recordings, .m4a) AND
-imported audio files (getFilesDir()/imported, .mp3 / .wav) in one
-combined, newest-first list, so there's a single place to find and
-play anything the user has captured or brought into the app.
+Recordings are saved to the app's own private storage (getFilesDir()),
+invisible to normal file manager apps by design (avoids Android
+scoped-storage/permission headaches).
 
 Every risky step is wrapped in try/except and reported directly in the
 list (as a message row) rather than crashing, per project strategy.
 """
 
 import os
+import threading
 
+from kivy.clock import Clock
 from kivy.factory import Factory
 from kivy.utils import platform
 from kivymd.uix.label import MDLabel
@@ -58,11 +60,11 @@ class RecordingsScreen(MDScreen):
 
         try:
             entries = []
+            entries += self._collect(_app_dir("recordings"), (".wav",), "Snimljeno")
             entries += self._collect(
-                _app_dir("recordings"), (".m4a",), "Snimljeno"
-            )
-            entries += self._collect(
-                _app_dir("imported"), (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"), "Ucitano"
+                _app_dir("imported"),
+                (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"),
+                "Ucitano",
             )
             entries.sort(key=lambda e: e[2], reverse=True)  # newest first
 
@@ -91,15 +93,23 @@ class RecordingsScreen(MDScreen):
 
     def _add_row(self, container, fname, full_path, label):
         size_kb = os.path.getsize(full_path) // 1024
+        is_wav = fname.lower().endswith(".wav")
+
         row = Factory.RecordingRow()
         row.filename = fname
         row.subtitle = "{} \u2014 {} KB".format(label, size_kb)
+        row.can_analyze = is_wav
+
         row.ids.play_btn.bind(
             on_release=lambda inst, p=full_path: self.play_recording(p)
         )
         row.ids.delete_btn.bind(
             on_release=lambda inst, p=full_path, r=row: self.delete_recording(p, r)
         )
+        if is_wav:
+            row.ids.analyze_btn.bind(
+                on_release=lambda inst, p=full_path, r=row: self.analyze_recording(p, r)
+            )
         container.add_widget(row)
 
     def _make_message(self, text):
@@ -161,3 +171,72 @@ class RecordingsScreen(MDScreen):
                 container.add_widget(
                     self._make_message("Greska pri brisanju: {}".format(e))
                 )
+
+    # -- FAZA 3: Analysis --------------------------------------------------
+    def analyze_recording(self, path, row_widget):
+        row_widget.subtitle = "Analiziram... 0%"
+
+        def _progress(fraction):
+            def _apply(dt):
+                row_widget.subtitle = "Analiziram... {}%".format(int(fraction * 100))
+            Clock.schedule_once(_apply)
+
+        def _run():
+            try:
+                from transcription.pitch_detection import detect_notes
+
+                notes = detect_notes(path, progress_callback=_progress)
+
+                def _done(dt):
+                    row_widget.subtitle = "Analiza zavrsena \u2014 {} nota".format(
+                        len(notes)
+                    )
+                    self._show_results_popup(path, notes)
+
+                Clock.schedule_once(_done)
+            except Exception as e:
+                def _fail(dt):
+                    row_widget.subtitle = "Greska pri analizi: {}".format(e)
+                Clock.schedule_once(_fail)
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _show_results_popup(self, path, notes):
+        from kivy.uix.popup import Popup
+        from kivy.uix.scrollview import ScrollView
+        from kivy.uix.label import Label
+
+        if not notes:
+            text = (
+                "Nije prepoznata nijedna jasna nota.\n\n"
+                "Probaj snimak sa jasnijim, glasnijim pevanjem/sviranjem "
+                "jedne melodije (bez pozadinske buke)."
+            )
+        else:
+            lines = [
+                "{:<5} {:>6.2f}s - {:<6.2f}s".format(n["note"], n["start"], n["end"])
+                for n in notes
+            ]
+            text = "\n".join(lines)
+
+        label = Label(
+            text=text,
+            size_hint_y=None,
+            halign="left",
+            valign="top",
+            font_size=14,
+        )
+        label.bind(
+            texture_size=lambda inst, val: setattr(label, "height", val[1]),
+            width=lambda inst, val: setattr(label, "text_size", (val, None)),
+        )
+
+        scroll = ScrollView()
+        scroll.add_widget(label)
+
+        popup = Popup(
+            title="Prepoznate note ({})".format(len(notes)),
+            content=scroll,
+            size_hint=(0.9, 0.85),
+        )
+        popup.open()
