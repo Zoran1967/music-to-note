@@ -9,6 +9,10 @@ env:
   PIP_CONSTRAINT: ${{ github.workspace }}/pip-constraints.txt
   BUILDOZER_WARN_ON_ROOT: 0
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-22.04
