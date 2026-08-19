@@ -19,6 +19,7 @@
 
 
 <AnalyzeBtn@ButtonBehavior+MDLabel>:
+    can_analyze: False
     text: "A"
     bold: True
     font_style: "Subtitle1"
@@ -28,8 +29,8 @@
     valign: "middle"
     size_hint: None, None
     size: dp(34), dp(34)
-    opacity: 1 if root.can_analyze else 0.25
-    disabled: not root.can_analyze
+    opacity: 1 if self.can_analyze else 0.25
+    disabled: not self.can_analyze
 
 
 <RecordingRow@MDBoxLayout>:
@@ -77,6 +78,7 @@
 
     AnalyzeBtn:
         id: analyze_btn
+        can_analyze: root.can_analyze
         pos_hint: {"center_y": 0.5}
 
     DeleteBtn:
