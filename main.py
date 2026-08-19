@@ -8,8 +8,8 @@ A modern Android app that listens to music (microphone or audio file)
 and turns it into sheet music / MIDI.
 
 FAZA 1: visual environment, theme, navigation -- DONE.
-FAZA 2: real microphone recording + real audio file import -- ACTIVE.
-FAZA 3+: audio analysis, sheet music, MIDI export -- still placeholders.
+FAZA 2: real microphone recording + real audio file import -- DONE.
+FAZA 3: audio analysis (aubio) -- ISOLATED TEST IN PROGRESS.
 
 DIAGNOSTIC MODE:
 If anything fails while building the real UI, this file catches the
@@ -84,6 +84,27 @@ def _build_real_app(app):
     sm.add_widget(MidiScreen(name=cfg.Routes.MIDI))
     sm.add_widget(RecordingsScreen(name=cfg.Routes.RECORDINGS))
     sm.add_widget(SettingsScreen(name=cfg.Routes.SETTINGS))
+
+    # --- FAZA 3 ISOLATED TEST -------------------------------------------
+    # Confirm the aubio C library actually built and loads correctly on
+    # this device BEFORE writing any real pitch-detection logic around
+    # it. Result is shown on the Settings screen (subtitle + phase
+    # badge) so it's visible immediately after opening the app -- no
+    # extra taps needed. This block is temporary and gets removed once
+    # aubio is confirmed working and real FAZA 3 code replaces it.
+    try:
+        import aubio
+        settings_screen = sm.get_screen(cfg.Routes.SETTINGS)
+        settings_screen.subtitle_text = (
+            "AUBIO TEST: USPESNO ucitan. Verzija modula dostupna, "
+            "spremno za FAZU 3 (detekcija tonova)."
+        )
+        settings_screen.phase_note = "AUBIO OK"
+    except Exception as e:
+        settings_screen = sm.get_screen(cfg.Routes.SETTINGS)
+        settings_screen.subtitle_text = "AUBIO TEST NEUSPESAN: {}".format(e)
+        settings_screen.phase_note = "AUBIO GRESKA"
+    # ---------------------------------------------------------------------
 
     sm.current = cfg.Routes.HOME
     app.sm = sm
