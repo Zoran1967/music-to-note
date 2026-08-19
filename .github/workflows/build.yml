@@ -2,58 +2,42 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
-
-env:
-  PIP_CONSTRAINT: ${{ github.workspace }}/pip-constraints.txt
-  BUILDOZER_WARN_ON_ROOT: 0
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+    # 1. Preuzimanje koda iz repozitorijuma
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+    # 2. Podešavanje Python okruženja
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+    # 3. Instalacija neophodnih zavisnosti za Buildozer
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade Cython virtualenv
 
-      - name: Pin a stable pip version everywhere
-        run: echo "pip==24.0" > pip-constraints.txt
+    # 4. Pokretanje ispravljene Buildozer akcije (korišćenjem @v1 umesto @v3)
+    - name: Build with Buildozer
+      uses: ArtemSBulgakov/buildozer-action@v1
+      id: buildozer
+      with:
+        command: buildozer android debug
+        buildozer_version: stable
 
-      # Keširanje Buildozer direktorijuma drastično ubrzava svaki naredni build
-      - name: Cache Buildozer global directory
-        uses: actions/cache@v4
-        with:
-          path: .buildozer
-          key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec', 'requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-buildozer-
-
-      # Zvanična akcija koja automatski rešava sve zavisnosti i ne zamrzava terminal
-      - name: Build APK with Buildozer Action
-        uses: ArtemSBulgakov/buildozer-action@v3
-        with:
-          workdir: .
-          buildozer_version: master
-          command: buildozer android debug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: music-to-note-apk
-          path: bin/*.apk
+    # 5. Čuvanje i otpremanje generisanog .apk fajla kao artefakta
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-apk
+        path: ${{ steps.buildozer.outputs.filename }}
