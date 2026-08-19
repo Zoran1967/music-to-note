@@ -10,7 +10,13 @@ version = 0.2.0
 
 # FAZA 2: added pyjnius (direct Android MediaRecorder access for mic
 # recording) and plyer (native file picker for audio import).
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy,kivymd==1.2.0,pyjnius,plyer
+# FAZA 3: added aubio (lightweight C library for pitch/onset detection --
+# chosen over librosa/numpy/scipy to avoid their long history of
+# python-for-android build failures). This line is being tested in
+# ISOLATION first: aubio is added to requirements and we only try
+# `import aubio` at startup to confirm it builds and loads correctly,
+# before writing any real pitch-detection logic around it.
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy,kivymd==1.2.0,pyjnius,plyer,aubio
 
 orientation = portrait
 fullscreen = 0
