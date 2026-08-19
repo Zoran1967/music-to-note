@@ -8,15 +8,13 @@ source.include_exts = py,png,jpg,kv,ttf,atlas
 
 version = 0.2.0
 
-# FAZA 2: pyjnius (Android MediaRecorder) + plyer (retired, replaced by
-# direct Intent-based file picker, but package harmless to keep).
+# FAZA 2: pyjnius (Android MediaRecorder) + plyer.
 # FAZA 3: aubio for pitch/onset detection. aubio 0.4.9's optional numpy
-# ufunc wrapper (ufuncs.c) is written against the OLD numpy C API and
-# fails to compile against numpy 2.x (breaking API change in 2024).
-# Pinning numpy==1.26.4 (last stable 1.x release, fully Python 3.11
-# compatible) fixes this without needing a numpy upgrade anywhere else
-# in the app.
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy,kivymd==1.2.0,pyjnius,plyer,numpy==1.26.4,aubio==0.4.9
+# ufunc wrapper needs an OLD numpy C API and breaks against numpy 2.x.
+# p4a's numpy recipe clones from git and does `git checkout <version>`,
+# and numpy's actual GitHub release tags use a "v" prefix (v1.26.4),
+# which our previous attempt (bare "1.26.4") didn't match.
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy,kivymd==1.2.0,pyjnius,plyer,numpy==v1.26.4,aubio==0.4.9
 
 orientation = portrait
 fullscreen = 0
