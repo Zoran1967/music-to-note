@@ -2,26 +2,25 @@
 """
 screens/recorder.py
 
-FAZA 2: Real microphone recording.
+FAZA 2/3: Real microphone recording -- now via raw PCM capture.
 
-Strategy (agreed and locked in project memory):
-- Uses pyjnius to call Android's built-in MediaRecorder directly.
-  We deliberately do NOT use plyer.audio (known "setAudioSource failed"
-  bug) nor the audiostream package (unmaintained, breaks on modern
-  python-for-android).
-- Every risky operation (permission request, recorder start/stop) is
-  wrapped in try/except that reports the problem in status_text on
-  screen, instead of silently failing or crashing the app.
-- Saves to the app's own private storage (getFilesDir()) so we don't
-  need broad external-storage permissions or deal with scoped-storage
-  headaches in this phase.
-- Uses MPEG_4 container + AAC encoder (.m4a) -- NOT 3GP/AMR_NB, which
-  proved unreliable (MediaPlayer "Prepare failed: status=0x1" on
-  playback, especially for short recordings).
+STRATEGY CHANGE (FAZA 3): switched from MediaRecorder (compressed
+AAC/.m4a output) to Android's AudioRecord API, which gives us raw PCM
+audio samples directly. We write those samples to a plain WAV file
+using Python's built-in `wave` module (zero dependencies). This means
+our own recordings can be pitch-analyzed later using a pure-Python
+algorithm (no numpy/aubio needed -- those proved too fragile to build
+for Android, see project history), AND it sidesteps any
+MediaRecorder/MediaPlayer codec quirks entirely.
+
+Every risky operation is wrapped in try/except that reports the
+problem in status_text on screen, per project strategy.
 """
 
 import os
 import time
+import threading
+import wave
 
 from kivy.clock import Clock
 from kivy.properties import StringProperty, BooleanProperty
@@ -29,6 +28,8 @@ from kivy.utils import platform
 from kivymd.uix.screen import MDScreen
 
 from config import icon
+
+SAMPLE_RATE = 16000  # plenty for musical pitch detection, keeps files small
 
 
 class RecorderScreen(MDScreen):
@@ -39,7 +40,10 @@ class RecorderScreen(MDScreen):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._recorder = None
+        self._audio_record = None
+        self._record_thread = None
+        self._stop_flag = False
+        self._pcm_chunks = []
         self._start_time = None
         self._clock_event = None
         self._output_path = None
@@ -98,10 +102,9 @@ class RecorderScreen(MDScreen):
         try:
             from jnius import autoclass
 
-            MediaRecorder = autoclass("android.media.MediaRecorder")
+            AudioRecord = autoclass("android.media.AudioRecord")
+            AudioFormat = autoclass("android.media.AudioFormat")
             AudioSource = autoclass("android.media.MediaRecorder$AudioSource")
-            OutputFormat = autoclass("android.media.MediaRecorder$OutputFormat")
-            AudioEncoder = autoclass("android.media.MediaRecorder$AudioEncoder")
             PythonActivity = autoclass("org.kivy.android.PythonActivity")
 
             context = PythonActivity.mActivity
@@ -109,20 +112,38 @@ class RecorderScreen(MDScreen):
                 context.getFilesDir().getAbsolutePath(), "recordings"
             )
             os.makedirs(rec_dir, exist_ok=True)
-            filename = "recording_{}.m4a".format(int(time.time()))
+            filename = "recording_{}.wav".format(int(time.time()))
             self._output_path = os.path.join(rec_dir, filename)
 
-            recorder = MediaRecorder()
-            recorder.setAudioSource(AudioSource.MIC)
-            recorder.setOutputFormat(OutputFormat.MPEG_4)
-            recorder.setAudioEncoder(AudioEncoder.AAC)
-            recorder.setAudioEncodingBitRate(128000)
-            recorder.setAudioSamplingRate(44100)
-            recorder.setOutputFile(self._output_path)
-            recorder.prepare()
-            recorder.start()
+            channel_config = AudioFormat.CHANNEL_IN_MONO
+            audio_format = AudioFormat.ENCODING_PCM_16BIT
 
-            self._recorder = recorder
+            min_buf = AudioRecord.getMinBufferSize(
+                SAMPLE_RATE, channel_config, audio_format
+            )
+            if min_buf <= 0:
+                raise RuntimeError("Nepodrzana konfiguracija mikrofona na ovom uredjaju")
+            buf_size = max(min_buf, SAMPLE_RATE * 2)
+
+            audio_record = AudioRecord(
+                AudioSource.MIC, SAMPLE_RATE, channel_config, audio_format, buf_size
+            )
+            audio_record.startRecording()
+
+            self._audio_record = audio_record
+            self._pcm_chunks = []
+            self._stop_flag = False
+
+            def _record_loop(rec=audio_record, size=buf_size, chunks=self._pcm_chunks):
+                java_buf = bytearray(size)
+                while not self._stop_flag:
+                    n = rec.read(java_buf, 0, len(java_buf))
+                    if n and n > 0:
+                        chunks.append(bytes(java_buf[:n]))
+
+            self._record_thread = threading.Thread(target=_record_loop, daemon=True)
+            self._record_thread.start()
+
             self._start_time = time.time()
             self.is_recording = True
             self.mic_icon = icon("stop.png")
@@ -141,35 +162,50 @@ class RecorderScreen(MDScreen):
         recorded_seconds = 0
         if self._start_time is not None:
             recorded_seconds = time.time() - self._start_time
+
+        self._stop_flag = True
+        if self._record_thread is not None:
+            self._record_thread.join(timeout=2.0)
+            self._record_thread = None
+
         try:
-            if self._recorder is not None:
-                self._recorder.stop()
-                self._recorder.release()
-                self._recorder = None
+            if self._audio_record is not None:
+                self._audio_record.stop()
+                self._audio_record.release()
+                self._audio_record = None
         except Exception as e:
             self.status_text = "Greska pri zaustavljanju: {}".format(e)
-            self._output_path = None
-        finally:
-            if self._clock_event is not None:
-                self._clock_event.cancel()
-                self._clock_event = None
-            self.is_recording = False
-            self.mic_icon = icon("microphone.png")
 
-            if recorded_seconds < 0.6 and self._output_path:
-                # Too short to produce a valid, playable file -- discard it
-                # instead of leaving a broken 0-second recording behind.
-                try:
-                    if os.path.exists(self._output_path):
-                        os.remove(self._output_path)
-                except Exception:
-                    pass
-                self.status_text = "Snimak prekratak, pokusaj ponovo (drzi due)"
-            elif self._output_path and os.path.exists(self._output_path):
-                size_kb = os.path.getsize(self._output_path) // 1024
-                self.status_text = "Sacuvano: {} ({} KB)".format(
-                    os.path.basename(self._output_path), size_kb
-                )
-            else:
-                self.status_text = "Snimak nije sacuvan"
+        if self._clock_event is not None:
+            self._clock_event.cancel()
+            self._clock_event = None
+        self.is_recording = False
+        self.mic_icon = icon("microphone.png")
+
+        if recorded_seconds < 0.6:
+            self.status_text = "Snimak prekratak, pokusaj ponovo (drzi due)"
+            self.timer_text = "00:00"
+            return
+
+        try:
+            pcm_data = b"".join(self._pcm_chunks)
+            self._pcm_chunks = []
+            if not pcm_data:
+                self.status_text = "Snimak nije sacuvan (nema podataka)"
+                self.timer_text = "00:00"
+                return
+
+            with wave.open(self._output_path, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)  # 16-bit PCM
+                wf.setframerate(SAMPLE_RATE)
+                wf.writeframes(pcm_data)
+
+            size_kb = os.path.getsize(self._output_path) // 1024
+            self.status_text = "Sacuvano: {} ({} KB)".format(
+                os.path.basename(self._output_path), size_kb
+            )
+        except Exception as e:
+            self.status_text = "Greska pri cuvanju WAV fajla: {}".format(e)
+        finally:
             self.timer_text = "00:00"
