@@ -8,15 +8,15 @@ source.include_exts = py,png,jpg,kv,ttf,atlas
 
 version = 0.2.0
 
-# FAZA 2: added pyjnius (direct Android MediaRecorder access for mic
-# recording) and plyer (native file picker for audio import).
-# FAZA 3: added aubio (lightweight C library for pitch/onset detection --
-# chosen over librosa/numpy/scipy to avoid their long history of
-# python-for-android build failures). This line is being tested in
-# ISOLATION first: aubio is added to requirements and we only try
-# `import aubio` at startup to confirm it builds and loads correctly,
-# before writing any real pitch-detection logic around it.
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy,kivymd==1.2.0,pyjnius,plyer,aubio
+# FAZA 2: pyjnius (Android MediaRecorder) + plyer (retired, replaced by
+# direct Intent-based file picker, but package harmless to keep).
+# FAZA 3: aubio for pitch/onset detection. aubio 0.4.9's optional numpy
+# ufunc wrapper (ufuncs.c) is written against the OLD numpy C API and
+# fails to compile against numpy 2.x (breaking API change in 2024).
+# Pinning numpy==1.26.4 (last stable 1.x release, fully Python 3.11
+# compatible) fixes this without needing a numpy upgrade anywhere else
+# in the app.
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy,kivymd==1.2.0,pyjnius,plyer,numpy==1.26.4,aubio==0.4.9
 
 orientation = portrait
 fullscreen = 0
