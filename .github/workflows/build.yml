@@ -1,13 +1,3 @@
-# ... (početak vašeg fajla sa 'on' i 'branches')
-
-env:
-  PIP_CONSTRAINT: ${{ github.workspace }}/pip-constraints.txt
-  BUILDOZER_WARN_ON_ROOT: 0
-
-jobs:
-  build:
-# ... (ostatak koda ostaje nepromenjen)
-
 name: Build Android APK
 
 on:
@@ -17,6 +7,7 @@ on:
 
 env:
   PIP_CONSTRAINT: ${{ github.workspace }}/pip-constraints.txt
+  BUILDOZER_WARN_ON_ROOT: 0
 
 jobs:
   build:
@@ -36,28 +27,3 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: Pin a stable pip version everywhere
-        run: echo "pip==24.0" > pip-constraints.txt
-
-      - name: Install system dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y git zip unzip openjdk-17-jdk python3-pip \
-            autoconf libtool pkg-config zlib1g-dev libncurses5-dev \
-            libncursesw5-dev cmake libffi-dev libssl-dev build-essential
-
-      - name: Install buildozer and cython
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install buildozer cython==0.29.33
-
-      - name: Build APK with buildozer
-        run: |
-          yes | buildozer android debug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: music-to-note-apk
-          path: bin/*.apk
