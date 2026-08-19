@@ -14,7 +14,6 @@ list (as a message row) rather than crashing, per project strategy.
 """
 
 import os
-import threading
 
 from kivy.clock import Clock
 from kivy.factory import Factory
@@ -176,32 +175,34 @@ class RecordingsScreen(MDScreen):
     def analyze_recording(self, path, row_widget):
         row_widget.subtitle = "Analiziram... 0%"
 
-        def _progress(fraction):
-            def _apply(dt):
-                row_widget.subtitle = "Analiziram... {}%".format(int(fraction * 100))
-            Clock.schedule_once(_apply)
+        try:
+            from transcription.pitch_detection import NoteDetector
+            detector = NoteDetector(path)
+        except Exception as e:
+            row_widget.subtitle = "Greska pri analizi: {}".format(e)
+            return
 
-        def _run():
+        def _tick(dt):
             try:
-                from transcription.pitch_detection import detect_notes
-
-                notes = detect_notes(path, progress_callback=_progress)
-
-                def _done(dt):
+                # Small chunk per tick -- keeps every frame of the app
+                # responsive so Android never thinks it's frozen.
+                still_working = detector.step(frames_per_step=4)
+                row_widget.subtitle = "Analiziram... {}%".format(
+                    int(detector.progress * 100)
+                )
+                if not still_working:
                     row_widget.subtitle = "Analiza zavrsena \u2014 {} nota".format(
-                        len(notes)
+                        len(detector.notes)
                     )
-                    self._show_results_popup(path, notes)
-
-                Clock.schedule_once(_done)
+                    self._show_results_popup(detector.notes)
+                    return False  # stop the Clock schedule
             except Exception as e:
-                def _fail(dt):
-                    row_widget.subtitle = "Greska pri analizi: {}".format(e)
-                Clock.schedule_once(_fail)
+                row_widget.subtitle = "Greska pri analizi: {}".format(e)
+                return False
 
-        threading.Thread(target=_run, daemon=True).start()
+        Clock.schedule_interval(_tick, 0.03)
 
-    def _show_results_popup(self, path, notes):
+    def _show_results_popup(self, notes):
         from kivy.uix.popup import Popup
         from kivy.uix.scrollview import ScrollView
         from kivy.uix.label import Label
