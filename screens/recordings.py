@@ -34,7 +34,6 @@ class RecordingsScreen(MDScreen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._player = None
-        self._decode_dots = 0
 
     # -- Lifecycle --------------------------------------------------
     def on_pre_enter(self, *args):
@@ -93,7 +92,6 @@ class RecordingsScreen(MDScreen):
 
     def _add_row(self, container, fname, full_path, label):
         size_kb = os.path.getsize(full_path) // 1024
-        # Sada svi audio fajlovi mogu da se analiziraju
         can_analyze = fname.lower().endswith(
             (".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac")
         )
@@ -188,15 +186,7 @@ class RecordingsScreen(MDScreen):
             callback(path)
             return
 
-        row_widget.subtitle = "Dekodiram audio..."
-
-        # Animacija tačkica dok se dekodira
-        self._decode_dots = 0
-        def _animate_decode(dt):
-            self._decode_dots = (self._decode_dots + 1) % 4
-            row_widget.subtitle = "Dekodiram audio" + "." * self._decode_dots
-
-        decode_anim = Clock.schedule_interval(_animate_decode, 0.5)
+        row_widget.subtitle = "Dekodiram... 0%"
 
         from transcription.media_decode import decode_to_wav
 
@@ -205,15 +195,23 @@ class RecordingsScreen(MDScreen):
         base = os.path.splitext(os.path.basename(path))[0]
         wav_path = os.path.join(tmp_dir, base + "_decoded.wav")
 
+        def _on_progress(progress):
+            row_widget.subtitle = "Dekodiram... {}%".format(int(progress * 100))
+
         def _on_decode_done(success, message):
-            decode_anim.cancel()
             if success:
                 row_widget.subtitle = "Dekodiranje završeno"
                 callback(wav_path)
             else:
                 row_widget.subtitle = "Greska pri dekodiranju: {}".format(message)
 
-        decode_to_wav(path, wav_path, _on_decode_done)
+        decode_to_wav(
+            path,
+            wav_path,
+            callback=_on_decode_done,
+            progress_callback=_on_progress,
+            timeout=60,
+        )
 
     def _start_analysis(self, path, row_widget):
         self._ensure_wav(path, row_widget, lambda wav_path: self._analyze_wav(wav_path, row_widget))
@@ -230,8 +228,6 @@ class RecordingsScreen(MDScreen):
 
         def _tick(dt):
             try:
-                # Small chunk per tick -- keeps every frame of the app
-                # responsive so Android never thinks it's frozen.
                 still_working = detector.step(frames_per_step=4)
                 row_widget.subtitle = "Analiziram... {}%".format(
                     int(detector.progress * 100)
@@ -241,7 +237,7 @@ class RecordingsScreen(MDScreen):
                         len(detector.notes)
                     )
                     self._show_results_popup(detector.notes, wav_path)
-                    return False  # stop the Clock schedule
+                    return False
             except Exception as e:
                 row_widget.subtitle = "Greska pri analizi: {}".format(e)
                 return False
