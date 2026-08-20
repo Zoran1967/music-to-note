@@ -263,18 +263,36 @@ class RecordingsScreen(MDScreen):
         )
 
         if notes:
-            export_btn = MDRaisedButton(
-                text="Izvezi kao PDF",
+            btn_row = BoxLayout(
+                orientation="horizontal",
+                spacing="8dp",
                 size_hint_y=None,
                 height="44dp",
-                pos_hint={"center_x": 0.5},
             )
-            export_btn.bind(
+
+            export_pdf_btn = MDRaisedButton(
+                text="Izvezi kao PDF",
+                size_hint_x=0.5,
+            )
+            export_pdf_btn.bind(
                 on_release=lambda inst: self._export_pdf(
                     notes, source_path, status_label
                 )
             )
-            root.add_widget(export_btn)
+            btn_row.add_widget(export_pdf_btn)
+
+            export_midi_btn = MDRaisedButton(
+                text="Izvezi kao MIDI",
+                size_hint_x=0.5,
+            )
+            export_midi_btn.bind(
+                on_release=lambda inst: self._export_midi(
+                    notes, source_path, status_label
+                )
+            )
+            btn_row.add_widget(export_midi_btn)
+
+            root.add_widget(btn_row)
 
         popup.open()
 
@@ -289,6 +307,21 @@ class RecordingsScreen(MDScreen):
             out_path = os.path.join(out_dir, "{}_note.pdf".format(base))
 
             export_notes_to_pdf(notes, out_path, title="Note - {}".format(base))
+            status_label.text = "Sacuvano: {}".format(out_path)
+        except Exception as e:
+            status_label.text = "Greska pri izvozu: {}".format(e)
+
+    def _export_midi(self, notes, source_path, status_label):
+        try:
+            from transcription.midi_export import export_notes_to_midi
+
+            out_dir = _export_dir()
+            os.makedirs(out_dir, exist_ok=True)
+
+            base = os.path.splitext(os.path.basename(source_path))[0]
+            out_path = os.path.join(out_dir, "{}_note.mid".format(base))
+
+            export_notes_to_midi(notes, out_path)
             status_label.text = "Sacuvano: {}".format(out_path)
         except Exception as e:
             status_label.text = "Greska pri izvozu: {}".format(e)
