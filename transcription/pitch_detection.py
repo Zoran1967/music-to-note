@@ -38,7 +38,7 @@ FMIN = 70.0    # ~D2, comfortably below a low male voice / bass instrument
 FMAX = 1050.0  # ~C6, comfortably above a soprano voice / high melody line
 MIN_NOTE_DURATION = 0.08  # seconds -- discard shorter, likely spurious blips
 SILENCE_ENERGY_RATIO = 0.0025  # relative energy threshold to call a frame "silent"
-MAX_ANALYSIS_SECONDS = 20  # keep pure-Python analysis's total work bounded
+MAX_ANALYSIS_SECONDS = 120  # keep pure-Python analysis's total work bounded
 MIN_CONFIDENCE = 0.35  # normalized autocorrelation threshold to accept a pitch
 
 
