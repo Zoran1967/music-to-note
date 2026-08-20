@@ -288,7 +288,7 @@ class RecordingsScreen(MDScreen):
             base = os.path.splitext(os.path.basename(source_path))[0]
             out_path = os.path.join(out_dir, "{}_note.pdf".format(base))
 
-            export_notes_to_pdf(notes, out_path, title="Note \u2014 {}".format(base))
+            export_notes_to_pdf(notes, out_path, title="Note - {}".format(base))
             status_label.text = "Sacuvano: {}".format(out_path)
         except Exception as e:
             status_label.text = "Greska pri izvozu: {}".format(e)
