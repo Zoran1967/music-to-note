@@ -10,7 +10,8 @@ eksternih biblioteka, ista strategija kao i ostatak projekta.
 
 Note se crtaju na 5 linija (violinski ključ). Trajanje nota je
 proporcionalno njihovom trajanju u sekundama -- duža nota = više
-horizontalnog prostora.
+horizontalnog prostora. Ako ima previše nota, prelazi se u novi red
+(kao u PDF-u). Vertikalni scroll se koristi za pregled svih redova.
 """
 
 from kivy.uix.scrollview import ScrollView
@@ -26,11 +27,13 @@ from config import COLORS, hex_to_rgba
 
 
 NOTE_LETTERS = ["C", "D", "E", "F", "G", "A", "B"]
-STAFF_LINE_GAP = dp(14)  # veći razmak između linija
+STAFF_LINE_GAP = dp(14)  # razmak između linija
 STAFF_TOP_MARGIN = dp(60)
 STAFF_BOTTOM_MARGIN = dp(80)
 STAFF_LINES = 5
 NOTE_SPACING_BASE = dp(28)  # minimalni horizontalni razmak između nota
+NOTES_PER_ROW = 12  # koliko nota u jednom redu (kao u PDF-u)
+ROW_PITCH = STAFF_LINE_GAP * 8  # vertikalni razmak između redova
 
 
 class StaffCanvas(Widget):
@@ -49,16 +52,7 @@ class StaffCanvas(Widget):
             return
 
         with self.canvas:
-            self._draw_staff_lines()
             self._draw_notes()
-
-    def _draw_staff_lines(self):
-        Color(*hex_to_rgba(COLORS["text_dim"], 0.6))
-        y_base = self.height - STAFF_TOP_MARGIN
-        line_spacing = STAFF_LINE_GAP
-        for i in range(STAFF_LINES):
-            y = y_base - i * line_spacing
-            Line(points=[0, y, self.width, y], width=1.2)
 
     def _note_to_step(self, note_name):
         """'A4' -> step broj (0 = E4, donja linija)."""
@@ -86,19 +80,35 @@ class StaffCanvas(Widget):
         durations = [max(0.1, n["end"] - n["start"]) for n in self.notes]
         max_dur = max(durations) if durations else 1.0
 
-        x = dp(40)  # početna pozicija (posle ključa)
-        y_base = self.height - STAFF_TOP_MARGIN
+        y_base_first_row = self.height - STAFF_TOP_MARGIN
         step_height = STAFF_LINE_GAP / 2.0
 
+        row = 0
+        col = 0
+
         for n in self.notes:
+            # Prelazak u novi red
+            if col >= NOTES_PER_ROW:
+                col = 0
+                row += 1
+
+            # Y osnova za trenutni red
+            y_base = y_base_first_row - row * ROW_PITCH
+
+            # Crtaj notne linije za ovaj red (ako je prvi put u redu)
+            if col == 0:
+                self._draw_staff_lines(y_base)
+
             duration = max(0.1, n["end"] - n["start"])
-            # Duža nota = više horizontalnog prostora
             note_width = NOTE_SPACING_BASE + (duration / max_dur) * dp(20)
+
+            # X pozicija u redu
+            x = dp(40) + col * dp(50)
 
             step, accidental = self._note_to_step(n["note"])
             y = y_base - step * step_height
 
-            # Crtanje pomoćnih linija za note van sistema
+            # Pomoćne linije za note van sistema
             if step < 0:
                 Color(*hex_to_rgba(COLORS["text_dim"], 0.4))
                 s = -2
@@ -123,7 +133,7 @@ class StaffCanvas(Widget):
             rx, ry = dp(5), dp(4)
             Ellipse(pos=(x - rx, y - ry), size=(rx * 2, ry * 2))
 
-            # Vrat note (linija gore ili dole)
+            # Vrat note
             if step >= 4:
                 Line(points=[x - rx, y, x - rx, y - dp(25)], width=1.5)
             else:
@@ -134,7 +144,7 @@ class StaffCanvas(Widget):
                 Color(*hex_to_rgba(COLORS["gold"], 0.9))
                 Rectangle(pos=(x - dp(14), y - dp(2)), size=(dp(5), dp(5)))
 
-            # Ispis imena note (kao Label widget)
+            # Ispis imena note
             label = MDLabel(
                 text=n["note"],
                 font_size=10,
@@ -147,7 +157,15 @@ class StaffCanvas(Widget):
             )
             self.add_widget(label)
 
-            x += note_width
+            col += 1
+
+    def _draw_staff_lines(self, y_base):
+        """Crtaj 5 linija za jedan red."""
+        Color(*hex_to_rgba(COLORS["text_dim"], 0.6))
+        line_spacing = STAFF_LINE_GAP
+        for i in range(STAFF_LINES):
+            y = y_base - i * line_spacing
+            Line(points=[0, y, self.width, y], width=1.2)
 
 
 class SheetMusicScreen(MDScreen):
@@ -168,7 +186,6 @@ class SheetMusicScreen(MDScreen):
             padding=[dp(8), dp(4)],
         )
 
-        # Dugme Nazad
         back_btn = MDLabel(
             text="← Nazad",
             font_size=16,
@@ -181,7 +198,6 @@ class SheetMusicScreen(MDScreen):
         back_btn.bind(on_touch_down=self._on_back_touch)
         top_bar.add_widget(back_btn)
 
-        # Naslov
         title = MDLabel(
             text="Notni zapis",
             font_style="H6",
@@ -192,17 +208,16 @@ class SheetMusicScreen(MDScreen):
         )
         top_bar.add_widget(title)
 
-        # Prazan prostor sa desne strane (da naslov bude centriran)
         spacer = MDLabel(size_hint_x=None, width=dp(80))
         top_bar.add_widget(spacer)
 
         layout.add_widget(top_bar)
 
-        # ScrollView sa Canvas-om
-        scroll = ScrollView()
+        # ScrollView sa Canvas-om (vertikalni scroll)
+        scroll = ScrollView(do_scroll_x=False, do_scroll_y=True)
         self.staff_canvas = StaffCanvas(
-            size_hint=(None, 1),
-            width=dp(500),
+            size_hint=(1, None),
+            height=dp(500),  # biće povećano ako ima više redova
         )
         scroll.add_widget(self.staff_canvas)
         layout.add_widget(scroll)
@@ -234,11 +249,13 @@ class SheetMusicScreen(MDScreen):
 
         if not self._notes:
             self.status_label.text = "Nema prepoznatih nota"
+            self.staff_canvas.height = dp(500)
         else:
             self.status_label.text = "{} nota".format(len(self._notes))
-            # Prilagodi širinu Canvas-a broju nota
-            total_width = dp(80) + len(self._notes) * dp(50)
-            self.staff_canvas.width = max(dp(500), total_width)
+            # Izračunaj potrebnu visinu za sve redove
+            rows = (len(self._notes) + NOTES_PER_ROW - 1) // NOTES_PER_ROW
+            needed_height = STAFF_TOP_MARGIN + rows * ROW_PITCH + STAFF_BOTTOM_MARGIN
+            self.staff_canvas.height = max(dp(500), needed_height)
 
     def clear_notes(self):
         """Obriši prikaz."""
