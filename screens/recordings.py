@@ -30,19 +30,6 @@ def _app_dir(subfolder):
     return os.path.join(context.getFilesDir().getAbsolutePath(), subfolder)
 
 
-def _export_dir():
-    """Public-ish app-scoped storage (no extra permissions needed on
-    modern Android): /storage/emulated/0/Android/data/<package>/files/exports
-    Visible via any file manager that can browse Android/data."""
-    from jnius import autoclass
-
-    PythonActivity = autoclass("org.kivy.android.PythonActivity")
-    context = PythonActivity.mActivity
-    ext_dir = context.getExternalFilesDir(None)
-    base = ext_dir.getAbsolutePath() if ext_dir is not None else _app_dir("exports")
-    return os.path.join(base, "exports")
-
-
 class RecordingsScreen(MDScreen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -299,29 +286,49 @@ class RecordingsScreen(MDScreen):
     def _export_pdf(self, notes, source_path, status_label):
         try:
             from transcription.notation_pdf import export_notes_to_pdf
-
-            out_dir = _export_dir()
-            os.makedirs(out_dir, exist_ok=True)
+            from android_storage import save_to_downloads
 
             base = os.path.splitext(os.path.basename(source_path))[0]
-            out_path = os.path.join(out_dir, "{}_note.pdf".format(base))
+            display_name = "{}_note.pdf".format(base)
 
-            export_notes_to_pdf(notes, out_path, title="Note - {}".format(base))
-            status_label.text = "Sacuvano: {}".format(out_path)
+            tmp_dir = _app_dir("tmp_exports")
+            os.makedirs(tmp_dir, exist_ok=True)
+            tmp_path = os.path.join(tmp_dir, display_name)
+
+            export_notes_to_pdf(notes, tmp_path, title="Note - {}".format(base))
+            status_label.text = "Cuvam u Download..."
+
+            def _on_done(success, message):
+                if success:
+                    status_label.text = "Sacuvano: {}".format(message)
+                else:
+                    status_label.text = "Greska pri izvozu: {}".format(message)
+
+            save_to_downloads(tmp_path, display_name, "application/pdf", _on_done)
         except Exception as e:
             status_label.text = "Greska pri izvozu: {}".format(e)
 
     def _export_midi(self, notes, source_path, status_label):
         try:
             from transcription.midi_export import export_notes_to_midi
-
-            out_dir = _export_dir()
-            os.makedirs(out_dir, exist_ok=True)
+            from android_storage import save_to_downloads
 
             base = os.path.splitext(os.path.basename(source_path))[0]
-            out_path = os.path.join(out_dir, "{}_note.mid".format(base))
+            display_name = "{}_note.mid".format(base)
 
-            export_notes_to_midi(notes, out_path)
-            status_label.text = "Sacuvano: {}".format(out_path)
+            tmp_dir = _app_dir("tmp_exports")
+            os.makedirs(tmp_dir, exist_ok=True)
+            tmp_path = os.path.join(tmp_dir, display_name)
+
+            export_notes_to_midi(notes, tmp_path)
+            status_label.text = "Cuvam u Download..."
+
+            def _on_done(success, message):
+                if success:
+                    status_label.text = "Sacuvano: {}".format(message)
+                else:
+                    status_label.text = "Greska pri izvozu: {}".format(message)
+
+            save_to_downloads(tmp_path, display_name, "audio/midi", _on_done)
         except Exception as e:
             status_label.text = "Greska pri izvozu: {}".format(e)
