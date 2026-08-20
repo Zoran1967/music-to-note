@@ -200,7 +200,13 @@ def _write_pdf(path, pages, page_w, page_h):
         write_obj(pnum, body)
 
     for i, cnum in enumerate(content_nums):
-        stream_data = pages[i].encode("latin-1")
+        # Safety net: the standard PDF text encoding here is latin-1
+        # (Helvetica/WinAnsi), so any character outside 0-255 (e.g. an
+        # em dash "\u2014", curly quotes, etc.) would otherwise raise
+        # UnicodeEncodeError and kill the whole export. Replace such
+        # characters instead of crashing -- "?" is the same fallback
+        # PDF viewers themselves use for glyphs missing from the font.
+        stream_data = pages[i].encode("latin-1", errors="replace")
         body = (
             "<< /Length {} >>\nstream\n".format(len(stream_data)).encode("latin-1")
             + stream_data
