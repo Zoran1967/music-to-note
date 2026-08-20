@@ -34,7 +34,7 @@ class RecordingsScreen(MDScreen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._player = None
-        self._decode_callback = None
+        self._decode_dots = 0
 
     # -- Lifecycle --------------------------------------------------
     def on_pre_enter(self, *args):
@@ -190,6 +190,14 @@ class RecordingsScreen(MDScreen):
 
         row_widget.subtitle = "Dekodiram audio..."
 
+        # Animacija tačkica dok se dekodira
+        self._decode_dots = 0
+        def _animate_decode(dt):
+            self._decode_dots = (self._decode_dots + 1) % 4
+            row_widget.subtitle = "Dekodiram audio" + "." * self._decode_dots
+
+        decode_anim = Clock.schedule_interval(_animate_decode, 0.5)
+
         from transcription.media_decode import decode_to_wav
 
         tmp_dir = _app_dir("tmp_decode")
@@ -198,6 +206,7 @@ class RecordingsScreen(MDScreen):
         wav_path = os.path.join(tmp_dir, base + "_decoded.wav")
 
         def _on_decode_done(success, message):
+            decode_anim.cancel()
             if success:
                 row_widget.subtitle = "Dekodiranje završeno"
                 callback(wav_path)
