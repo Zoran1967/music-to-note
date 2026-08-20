@@ -92,12 +92,14 @@ class RecordingsScreen(MDScreen):
 
     def _add_row(self, container, fname, full_path, label):
         size_kb = os.path.getsize(full_path) // 1024
-        is_wav = fname.lower().endswith(".wav")
+        can_analyze = fname.lower().endswith(
+            (".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac")
+        )
 
         row = Factory.RecordingRow()
         row.filename = fname
         row.subtitle = "{} \u2014 {} KB".format(label, size_kb)
-        row.can_analyze = is_wav
+        row.can_analyze = can_analyze
 
         row.ids.play_btn.bind(
             on_release=lambda inst, p=full_path: self.play_recording(p)
@@ -105,7 +107,7 @@ class RecordingsScreen(MDScreen):
         row.ids.delete_btn.bind(
             on_release=lambda inst, p=full_path, r=row: self.delete_recording(p, r)
         )
-        if is_wav:
+        if can_analyze:
             row.ids.analyze_btn.bind(
                 on_release=lambda inst, p=full_path, r=row: self.analyze_recording(p, r)
             )
@@ -174,10 +176,38 @@ class RecordingsScreen(MDScreen):
     # -- FAZA 3: Analysis --------------------------------------------------
     def analyze_recording(self, path, row_widget):
         row_widget.subtitle = "Analiziram... 0%"
+        Clock.schedule_once(
+            lambda dt: self._start_analysis(path, row_widget), 0
+        )
+
+    def _ensure_wav(self, path, row_widget):
+        if path.lower().endswith(".wav"):
+            return path
+
+        row_widget.subtitle = "Dekodiram audio..."
+
+        from transcription.media_decode import decode_to_wav
+
+        tmp_dir = _app_dir("tmp_decode")
+        os.makedirs(tmp_dir, exist_ok=True)
+        base = os.path.splitext(os.path.basename(path))[0]
+        wav_path = os.path.join(tmp_dir, base + "_decoded.wav")
+
+        decode_to_wav(path, wav_path)
+        return wav_path
+
+    def _start_analysis(self, path, row_widget):
+        try:
+            wav_path = self._ensure_wav(path, row_widget)
+        except Exception as e:
+            row_widget.subtitle = "Greska pri dekodiranju: {}".format(e)
+            return
+
+        row_widget.subtitle = "Analiziram... 0%"
 
         try:
             from transcription.pitch_detection import NoteDetector
-            detector = NoteDetector(path)
+            detector = NoteDetector(wav_path)
         except Exception as e:
             row_widget.subtitle = "Greska pri analizi: {}".format(e)
             return
