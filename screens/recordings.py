@@ -281,10 +281,27 @@ class RecordingsScreen(MDScreen):
 
         if notes:
             btn_row = BoxLayout(
-                orientation="horizontal",
+                orientation="vertical",
                 spacing="8dp",
                 size_hint_y=None,
                 height="44dp",
+            )
+
+            show_sheet_btn = MDRaisedButton(
+                text="Prikaži notni zapis",
+                size_hint_y=None,
+                height="40dp",
+            )
+            show_sheet_btn.bind(
+                on_release=lambda inst: self._show_sheet_music(notes, source_path)
+            )
+            btn_row.add_widget(show_sheet_btn)
+
+            export_row = BoxLayout(
+                orientation="horizontal",
+                spacing="8dp",
+                size_hint_y=None,
+                height="40dp",
             )
 
             export_pdf_btn = MDRaisedButton(
@@ -296,7 +313,7 @@ class RecordingsScreen(MDScreen):
                     notes, source_path, status_label
                 )
             )
-            btn_row.add_widget(export_pdf_btn)
+            export_row.add_widget(export_pdf_btn)
 
             export_midi_btn = MDRaisedButton(
                 text="Izvezi kao MIDI",
@@ -307,11 +324,28 @@ class RecordingsScreen(MDScreen):
                     notes, source_path, status_label
                 )
             )
-            btn_row.add_widget(export_midi_btn)
+            export_row.add_widget(export_midi_btn)
 
+            btn_row.add_widget(export_row)
             root.add_widget(btn_row)
 
         popup.open()
+
+    def _show_sheet_music(self, notes, source_path):
+        """Otvara SheetMusicScreen sa prepoznatim notama."""
+        try:
+            from kivy.app import App
+
+            app = App.get_running_app()
+            sheet_screen = app.root.get_screen("sheet_music")
+            sheet_screen.set_notes(notes)
+            app.root.current = "sheet_music"
+        except Exception as e:
+            container = self.ids.get("list_container")
+            if container is not None:
+                container.add_widget(
+                    self._make_message("Greska pri prikazu nota: {}".format(e))
+                )
 
     def _export_pdf(self, notes, source_path, status_label):
         try:
