@@ -12,14 +12,18 @@ Namerno pojednostavljeno za prvu verziju:
   - Nema muzickog fonta na uredjaju, pa je violinski kljuc nacrtan
     rucno kao vektorski oblik (krugovi + kriva), ne kaligrafski, ali
     prepoznatljiv.
-  - Cist Python (reportlab) -- bez ijedne C-ekstenzije, ista strategija
-    kao i transcription/pitch_detection.py, da se izbegnu problemi sa
-    buildovanjem na python-for-android.
+  - Cist Python (transcription/simple_pdf.py) -- bez ijedne
+    C-ekstenzije/spoljne biblioteke, ista strategija kao i
+    transcription/pitch_detection.py, da se izbegnu problemi sa
+    buildovanjem na python-for-android. (reportlab je probano prvo,
+    ali njegov C-accelerator ne builduje se na NDK-u sa Python 3.11.)
 """
 
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import mm
+from transcription.simple_pdf import SimplePDFCanvas, PAGE_A4
+
+# mm conversion (reportlab used lib.units.mm = 72/25.4 points per mm;
+# defined locally now to drop the reportlab dependency entirely).
+mm = 72.0 / 25.4
 
 NOTE_LETTERS = ["C", "D", "E", "F", "G", "A", "B"]
 
@@ -116,8 +120,8 @@ def export_notes_to_pdf(notes, out_path, title="Prepoznate note"):
     """
     usable_notes = [n for n in notes if n.get("note")]
 
-    page_w, page_h = A4
-    c = canvas.Canvas(out_path, pagesize=A4)
+    page_w, page_h = PAGE_A4
+    c = SimplePDFCanvas(out_path, pagesize=PAGE_A4)
 
     c.setFont("Helvetica-Bold", 14)
     c.drawString(LEFT_MARGIN, page_h - 20 * mm, title)
