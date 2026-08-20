@@ -26,11 +26,11 @@ from config import COLORS, hex_to_rgba
 
 
 NOTE_LETTERS = ["C", "D", "E", "F", "G", "A", "B"]
-STAFF_LINE_GAP = dp(9)
-STAFF_TOP_MARGIN = dp(30)
-STAFF_BOTTOM_MARGIN = dp(30)
+STAFF_LINE_GAP = dp(14)  # veći razmak između linija
+STAFF_TOP_MARGIN = dp(60)
+STAFF_BOTTOM_MARGIN = dp(80)
 STAFF_LINES = 5
-NOTE_SPACING_BASE = dp(20)  # minimalni horizontalni razmak između nota
+NOTE_SPACING_BASE = dp(28)  # minimalni horizontalni razmak između nota
 
 
 class StaffCanvas(Widget):
@@ -53,12 +53,12 @@ class StaffCanvas(Widget):
             self._draw_notes()
 
     def _draw_staff_lines(self):
-        Color(*hex_to_rgba(COLORS["text_dim"], 0.5))
+        Color(*hex_to_rgba(COLORS["text_dim"], 0.6))
         y_base = self.height - STAFF_TOP_MARGIN
         line_spacing = STAFF_LINE_GAP
         for i in range(STAFF_LINES):
             y = y_base - i * line_spacing
-            Line(points=[0, y, self.width, y], width=1)
+            Line(points=[0, y, self.width, y], width=1.2)
 
     def _note_to_step(self, note_name):
         """'A4' -> step broj (0 = E4, donja linija)."""
@@ -93,7 +93,7 @@ class StaffCanvas(Widget):
         for n in self.notes:
             duration = max(0.1, n["end"] - n["start"])
             # Duža nota = više horizontalnog prostora
-            note_width = NOTE_SPACING_BASE + (duration / max_dur) * dp(30)
+            note_width = NOTE_SPACING_BASE + (duration / max_dur) * dp(20)
 
             step, accidental = self._note_to_step(n["note"])
             y = y_base - step * step_height
@@ -105,7 +105,7 @@ class StaffCanvas(Widget):
                 while s >= step:
                     if s % 2 == 0:
                         ly = y_base - s * step_height
-                        Line(points=[x - dp(5), ly, x + dp(5), ly], width=1)
+                        Line(points=[x - dp(6), ly, x + dp(6), ly], width=1)
                     s -= 1
             elif step > 8:
                 Color(*hex_to_rgba(COLORS["text_dim"], 0.4))
@@ -113,26 +113,26 @@ class StaffCanvas(Widget):
                 while s <= step:
                     if s % 2 == 0:
                         ly = y_base - s * step_height
-                        Line(points=[x - dp(5), ly, x + dp(5), ly], width=1)
+                        Line(points=[x - dp(6), ly, x + dp(6), ly], width=1)
                     s += 1
 
             # Crna boja za note
             Color(0, 0, 0, 1)
 
             # Nota (elipsa)
-            rx, ry = dp(4), dp(3)
+            rx, ry = dp(5), dp(4)
             Ellipse(pos=(x - rx, y - ry), size=(rx * 2, ry * 2))
 
             # Vrat note (linija gore ili dole)
             if step >= 4:
-                Line(points=[x - rx, y, x - rx, y - dp(22)], width=1.5)
+                Line(points=[x - rx, y, x - rx, y - dp(25)], width=1.5)
             else:
-                Line(points=[x + rx, y, x + rx, y + dp(22)], width=1.5)
+                Line(points=[x + rx, y, x + rx, y + dp(25)], width=1.5)
 
             # Akcidental
             if accidental:
                 Color(*hex_to_rgba(COLORS["gold"], 0.9))
-                Rectangle(pos=(x - dp(12), y - dp(1)), size=(dp(4), dp(4)))
+                Rectangle(pos=(x - dp(14), y - dp(2)), size=(dp(5), dp(5)))
 
             # Ispis imena note (kao Label widget)
             label = MDLabel(
@@ -142,7 +142,7 @@ class StaffCanvas(Widget):
                 text_color=hex_to_rgba(COLORS["text_dim"], 0.8),
                 size_hint=(None, None),
                 size=(dp(40), dp(15)),
-                pos=(x - dp(20), y - dp(28)),
+                pos=(x - dp(20), y - dp(35)),
                 halign="center",
             )
             self.add_widget(label)
