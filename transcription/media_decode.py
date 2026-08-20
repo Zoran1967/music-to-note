@@ -15,29 +15,32 @@ raw PCM frames which we then write into a WAV container ourselves.
 STRATEGY: We use Android's MediaExtractor to read the compressed audio
 tracks, MediaCodec to decode them, and then write the raw PCM samples
 into a standard WAV file. This is done on a background thread so the
-UI never freezes (clocking long enough to trigger Android's "app not
-responding" watchdog would be bad).
+UI never freezes.
 
-Note: This is a simplified implementation. It assumes the audio has a
-standard sample rate and channel count that we can read from MediaFormat.
-It works for most common files (MP3, M4A, AAC, OGG, FLAC).
+Progress reporting: We use MediaMetadataRetriever to get the total
+duration of the audio (if available) and compare it to the presentation
+time of the last decoded sample to calculate progress (0.0 - 1.0).
+A timeout is also applied to avoid infinite loops on problematic files.
 """
 
 import os
 import wave
 import threading
+import time
+
 from kivy.clock import Clock
 
 
-def decode_to_wav(source_path, dest_path, callback=None):
+def decode_to_wav(source_path, dest_path, callback=None, progress_callback=None, timeout=60):
     """
     Decode a compressed audio file (MP3/M4A/AAC/OGG/FLAC) to WAV.
 
     Args:
         source_path: path to the compressed audio file
         dest_path: path where the WAV file should be written
-        callback: optional callback function (success, message) called
-                  when decoding finishes
+        callback: function (success, message) called on completion
+        progress_callback: function (progress_float) called with 0.0-1.0
+        timeout: maximum seconds to wait for decode to finish
 
     Returns:
         True if decoding started, False on error
@@ -47,18 +50,38 @@ def decode_to_wav(source_path, dest_path, callback=None):
             callback(False, "Fajl ne postoji: {}".format(source_path))
         return False
 
-    # Run decoding on a background thread
     thread = threading.Thread(
         target=_decode_worker,
-        args=(source_path, dest_path, callback),
+        args=(source_path, dest_path, callback, progress_callback, timeout),
         daemon=True,
     )
     thread.start()
     return True
 
 
-def _decode_worker(source_path, dest_path, callback):
+def _get_audio_duration_ms(source_path):
+    """Try to get the total duration in milliseconds via MediaMetadataRetriever."""
+    try:
+        from jnius import autoclass
+
+        MediaMetadataRetriever = autoclass("android.media.MediaMetadataRetriever")
+        retriever = MediaMetadataRetriever()
+        retriever.setDataSource(source_path)
+
+        METADATA_KEY_DURATION = 9  # MediaMetadataRetriever.METADATA_KEY_DURATION
+        duration_str = retriever.extractMetadata(METADATA_KEY_DURATION)
+        retriever.release()
+        if duration_str:
+            return int(duration_str)
+    except Exception:
+        pass
+    return None
+
+
+def _decode_worker(source_path, dest_path, callback, progress_callback, timeout):
     """Background worker that does the actual MediaCodec decoding."""
+    start_time = time.time()
+
     try:
         from jnius import autoclass
         from android import mActivity
@@ -66,7 +89,6 @@ def _decode_worker(source_path, dest_path, callback):
         MediaExtractor = autoclass("android.media.MediaExtractor")
         MediaFormat = autoclass("android.media.MediaFormat")
         MediaCodec = autoclass("android.media.MediaCodec")
-        ByteBuffer = autoclass("java.nio.ByteBuffer")
 
         extractor = MediaExtractor()
         extractor.setDataSource(source_path)
@@ -112,7 +134,22 @@ def _decode_worker(source_path, dest_path, callback):
         input_done = False
         output_done = False
 
+        total_duration_ms = _get_audio_duration_ms(source_path)
+        last_presentation_time_us = 0
+
         while not output_done:
+            # Provera timeout-a
+            if time.time() - start_time > timeout:
+                codec.stop()
+                codec.release()
+                extractor.release()
+                if callback:
+                    Clock.schedule_once(
+                        lambda dt: callback(False, "Dekodiranje je predugo trajalo (timeout)"),
+                        0,
+                    )
+                return
+
             # Ubaci podatke
             if not input_done:
                 input_index = codec.dequeueInputBuffer(10000)
@@ -121,7 +158,6 @@ def _decode_worker(source_path, dest_path, callback):
                     sample_size = extractor.readSampleData(input_buffer, 0)
 
                     if sample_size < 0:
-                        # Kraj inputa
                         codec.queueInputBuffer(
                             input_index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM
                         )
@@ -144,6 +180,13 @@ def _decode_worker(source_path, dest_path, callback):
                 output_buffer.get(temp, 0, info.size)
                 pcm_data.extend(temp)
 
+                last_presentation_time_us = info.presentationTimeUs
+
+                # Ažuriraj progres
+                if progress_callback and total_duration_ms:
+                    progress = min(1.0, (last_presentation_time_us / 1000.0) / total_duration_ms)
+                    Clock.schedule_once(lambda dt, p=progress: progress_callback(p), 0)
+
                 codec.releaseOutputBuffer(output_index, False)
 
                 if info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM:
@@ -164,7 +207,7 @@ def _decode_worker(source_path, dest_path, callback):
 
         if callback:
             Clock.schedule_once(
-                lambda dt: callback(True, "Dekodiranje završeno: {}".format(dest_path)),
+                lambda dt: callback(True, "Dekodiranje završeno"),
                 0,
             )
 
