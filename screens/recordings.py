@@ -3,7 +3,7 @@
 screens/recordings.py
 
 FAZA 2/3: Recordings + imported audio list, in-app playback, delete,
-and (FAZA 3, WAV recordings only) pure-Python pitch/note analysis.
+and (FAZA 3) pure-Python pitch/note analysis.
 
 Recordings are saved to the app's own private storage (getFilesDir()),
 invisible to normal file manager apps by design (avoids Android
@@ -34,6 +34,7 @@ class RecordingsScreen(MDScreen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._player = None
+        self._decode_callback = None
 
     # -- Lifecycle --------------------------------------------------
     def on_pre_enter(self, *args):
@@ -92,6 +93,7 @@ class RecordingsScreen(MDScreen):
 
     def _add_row(self, container, fname, full_path, label):
         size_kb = os.path.getsize(full_path) // 1024
+        # Sada svi audio fajlovi mogu da se analiziraju
         can_analyze = fname.lower().endswith(
             (".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac")
         )
@@ -180,9 +182,11 @@ class RecordingsScreen(MDScreen):
             lambda dt: self._start_analysis(path, row_widget), 0
         )
 
-    def _ensure_wav(self, path, row_widget):
+    def _ensure_wav(self, path, row_widget, callback):
+        """Ako je WAV, vrati ga odmah. Ako nije, dekodiraj kroz MediaCodec."""
         if path.lower().endswith(".wav"):
-            return path
+            callback(path)
+            return
 
         row_widget.subtitle = "Dekodiram audio..."
 
@@ -193,16 +197,19 @@ class RecordingsScreen(MDScreen):
         base = os.path.splitext(os.path.basename(path))[0]
         wav_path = os.path.join(tmp_dir, base + "_decoded.wav")
 
-        decode_to_wav(path, wav_path)
-        return wav_path
+        def _on_decode_done(success, message):
+            if success:
+                row_widget.subtitle = "Dekodiranje završeno"
+                callback(wav_path)
+            else:
+                row_widget.subtitle = "Greska pri dekodiranju: {}".format(message)
+
+        decode_to_wav(path, wav_path, _on_decode_done)
 
     def _start_analysis(self, path, row_widget):
-        try:
-            wav_path = self._ensure_wav(path, row_widget)
-        except Exception as e:
-            row_widget.subtitle = "Greska pri dekodiranju: {}".format(e)
-            return
+        self._ensure_wav(path, row_widget, lambda wav_path: self._analyze_wav(wav_path, row_widget))
 
+    def _analyze_wav(self, wav_path, row_widget):
         row_widget.subtitle = "Analiziram... 0%"
 
         try:
@@ -224,7 +231,7 @@ class RecordingsScreen(MDScreen):
                     row_widget.subtitle = "Analiza zavrsena \u2014 {} nota".format(
                         len(detector.notes)
                     )
-                    self._show_results_popup(detector.notes, path)
+                    self._show_results_popup(detector.notes, wav_path)
                     return False  # stop the Clock schedule
             except Exception as e:
                 row_widget.subtitle = "Greska pri analizi: {}".format(e)
