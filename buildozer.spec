@@ -14,7 +14,7 @@ version = 0.3.0
 # proved too fragile to build for Android (numpy 2.x ABI break in
 # aubio's old C code, then numpy recipe git-tag mismatches). No new
 # native dependencies needed for this phase.
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy,kivymd==1.2.0,pyjnius,plyer,reportlab
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy,kivymd==1.2.0,pyjnius,plyer
 
 orientation = portrait
 fullscreen = 0
