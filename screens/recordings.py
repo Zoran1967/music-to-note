@@ -30,6 +30,19 @@ def _app_dir(subfolder):
     return os.path.join(context.getFilesDir().getAbsolutePath(), subfolder)
 
 
+def _export_dir():
+    """Public-ish app-scoped storage (no extra permissions needed on
+    modern Android): /storage/emulated/0/Android/data/<package>/files/exports
+    Visible via any file manager that can browse Android/data."""
+    from jnius import autoclass
+
+    PythonActivity = autoclass("org.kivy.android.PythonActivity")
+    context = PythonActivity.mActivity
+    ext_dir = context.getExternalFilesDir(None)
+    base = ext_dir.getAbsolutePath() if ext_dir is not None else _app_dir("exports")
+    return os.path.join(base, "exports")
+
+
 class RecordingsScreen(MDScreen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -194,7 +207,7 @@ class RecordingsScreen(MDScreen):
                     row_widget.subtitle = "Analiza zavrsena \u2014 {} nota".format(
                         len(detector.notes)
                     )
-                    self._show_results_popup(detector.notes)
+                    self._show_results_popup(detector.notes, path)
                     return False  # stop the Clock schedule
             except Exception as e:
                 row_widget.subtitle = "Greska pri analizi: {}".format(e)
@@ -202,10 +215,12 @@ class RecordingsScreen(MDScreen):
 
         Clock.schedule_interval(_tick, 0.03)
 
-    def _show_results_popup(self, notes):
+    def _show_results_popup(self, notes, source_path):
         from kivy.uix.popup import Popup
         from kivy.uix.scrollview import ScrollView
         from kivy.uix.label import Label
+        from kivy.uix.boxlayout import BoxLayout
+        from kivymd.uix.button import MDRaisedButton
 
         if not notes:
             text = (
@@ -235,9 +250,45 @@ class RecordingsScreen(MDScreen):
         scroll = ScrollView()
         scroll.add_widget(label)
 
+        root = BoxLayout(orientation="vertical", spacing="8dp")
+        root.add_widget(scroll)
+
+        status_label = Label(text="", size_hint_y=None, height="30dp", font_size=13)
+        root.add_widget(status_label)
+
         popup = Popup(
             title="Prepoznate note ({})".format(len(notes)),
-            content=scroll,
+            content=root,
             size_hint=(0.9, 0.85),
         )
+
+        if notes:
+            export_btn = MDRaisedButton(
+                text="Izvezi kao PDF",
+                size_hint_y=None,
+                height="44dp",
+                pos_hint={"center_x": 0.5},
+            )
+            export_btn.bind(
+                on_release=lambda inst: self._export_pdf(
+                    notes, source_path, status_label
+                )
+            )
+            root.add_widget(export_btn)
+
         popup.open()
+
+    def _export_pdf(self, notes, source_path, status_label):
+        try:
+            from transcription.notation_pdf import export_notes_to_pdf
+
+            out_dir = _export_dir()
+            os.makedirs(out_dir, exist_ok=True)
+
+            base = os.path.splitext(os.path.basename(source_path))[0]
+            out_path = os.path.join(out_dir, "{}_note.pdf".format(base))
+
+            export_notes_to_pdf(notes, out_path, title="Note \u2014 {}".format(base))
+            status_label.text = "Sacuvano: {}".format(out_path)
+        except Exception as e:
+            status_label.text = "Greska pri izvozu: {}".format(e)
