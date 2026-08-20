@@ -5,18 +5,10 @@ transcription/notation_pdf.py
 FAZA 4: Export prepoznatih nota kao PDF sa notnim sistemom (violinski
 kljuc), koji se moze odstampati ili podeliti.
 
-Namerno pojednostavljeno za prvu verziju:
-  - Sve note se crtaju kao cetvrtine u nizu (ritam se NE izvodi iz
-    trajanja nota -- to je nepouzdano bez poznatog tempa i ostavljeno
-    je za kasniju fazu). Visina tona je tacna.
-  - Nema muzickog fonta na uredjaju, pa je violinski kljuc nacrtan
-    rucno kao vektorski oblik (krugovi + kriva), ne kaligrafski, ali
-    prepoznatljiv.
-  - Cist Python (transcription/simple_pdf.py) -- bez ijedne
-    C-ekstenzije/spoljne biblioteke, ista strategija kao i
-    transcription/pitch_detection.py, da se izbegnu problemi sa
-    buildovanjem na python-for-android. (reportlab je probano prvo,
-    ali njegov C-accelerator ne builduje se na NDK-u sa Python 3.11.)
+Sada sa RITMOM: note imaju trajanje (osmine, četvrtine, polovine)
+proporcionalno njihovom trajanju u sekundama. Duža nota = duže
+trajanje. Sistem radi bez poznatog tempa tako što normalizuje
+trajanja na najčešće muzičke vrednosti.
 """
 
 from transcription.simple_pdf import SimplePDFCanvas, PAGE_A4
@@ -29,7 +21,7 @@ NOTE_LETTERS = ["C", "D", "E", "F", "G", "A", "B"]
 
 STAFF_LINE_GAP = 4 * mm
 STEP_HEIGHT = STAFF_LINE_GAP / 2.0
-NOTE_SPACING = 12 * mm
+NOTE_SPACING = 10 * mm
 LEFT_MARGIN = 20 * mm
 CLEF_COLUMN_WIDTH = 20 * mm
 STAFF_LINES = 5
@@ -45,13 +37,40 @@ def _pitch_to_step(note_name):
     if rest and rest[0] in "#b":
         accidental = rest[0]
         rest = rest[1:]
-    octave = int(rest)
+    try:
+        octave = int(rest)
+    except (ValueError, IndexError):
+        octave = 4
 
     letter_index = NOTE_LETTERS.index(letter)
     ref_letter_index = NOTE_LETTERS.index("E")
     ref_octave = 4
     step = (octave - ref_octave) * 7 + (letter_index - ref_letter_index)
     return step, accidental
+
+
+def _determine_note_duration(duration_sec, min_dur, max_dur):
+    """
+    Pretvara trajanje u sekundama u muzičku notnu vrednost.
+    Vraća (duration_type, is_dotted) gde duration_type je:
+    'whole', 'half', 'quarter', 'eighth', 'sixteenth'
+    """
+    if max_dur <= min_dur or duration_sec <= 0:
+        return "quarter", False
+
+    # Normalizuj na opseg [0, 1]
+    normalized = (duration_sec - min_dur) / (max_dur - min_dur)
+
+    if normalized < 0.15:
+        return "sixteenth", False
+    elif normalized < 0.35:
+        return "eighth", False
+    elif normalized < 0.65:
+        return "quarter", False
+    elif normalized < 0.85:
+        return "half", False
+    else:
+        return "whole", False
 
 
 def _draw_staff(c, x_start, y_bottom, width):
@@ -76,9 +95,11 @@ def _draw_treble_clef(c, x, y_bottom):
     c.restoreState()
 
 
-def _draw_note(c, x, y_bottom, step, accidental):
+def _draw_note(c, x, y_bottom, step, accidental, duration_type="quarter"):
+    """Crta notu sa odgovarajućim trajanjem."""
     y = y_bottom + step * STEP_HEIGHT
 
+    # Pomoćne linije za note van sistema
     if step < 0:
         s = -2
         while s >= step:
@@ -94,15 +115,35 @@ def _draw_note(c, x, y_bottom, step, accidental):
                 c.line(x - 3 * mm, ly, x + 3 * mm, ly)
             s += 2
 
+    # Crtanje note zavisi od trajanja
     rx, ry = 2.2 * mm, 1.6 * mm
     c.setFillColorRGB(0, 0, 0)
+
+    # Note head (elipsa)
     c.ellipse(x - rx, y - ry, x + rx, y + ry, fill=1, stroke=0)
 
-    if step >= 4:
-        c.line(x - rx, y, x - rx, y - 8 * mm)
+    # Vrat note
+    if duration_type in ("whole",):
+        # Cela nota nema vrat
+        pass
     else:
-        c.line(x + rx, y, x + rx, y + 8 * mm)
+        if step >= 4:
+            c.line(x - rx, y, x - rx, y - 8 * mm)
+        else:
+            c.line(x + rx, y, x + rx, y + 8 * mm)
 
+    # Dodatne oznake za trajanje
+    if duration_type in ("half",):
+        # Polovina: šuplja nota (samo obris)
+        c.setFillColorRGB(1, 1, 1)
+        c.ellipse(x - rx, y - ry, x + rx, y + ry, fill=1, stroke=1)
+    elif duration_type in ("eighth", "sixteenth"):
+        # Osmina/šesnaestina: barjak na vratu
+        flag_x = x + rx if step < 4 else x - rx
+        flag_y = y + 8 * mm if step < 4 else y - 8 * mm
+        c.line(flag_x, flag_y, flag_x + 3 * mm, flag_y - 2 * mm)
+
+    # Akcidental
     if accidental == "#":
         c.setFont("Helvetica-Bold", 10)
         c.drawString(x - 7 * mm, y - 2 * mm, "#")
@@ -112,12 +153,8 @@ def _draw_note(c, x, y_bottom, step, accidental):
 
 
 def export_notes_to_pdf(notes, out_path, title="Prepoznate note"):
-    """notes: list of dicts with a 'note' key like 'A4' (as produced by
-    transcription.pitch_detection.NoteDetector). Writes a PDF to out_path.
-
-    Notes with note=None (silence gaps) are skipped automatically if
-    present -- callers can pass NoteDetector.notes directly.
-    """
+    """notes: list of dicts with 'note', 'start', 'end' keys.
+    Writes a PDF to out_path with ritam (trajanje nota)."""
     usable_notes = [n for n in notes if n.get("note")]
 
     page_w, page_h = PAGE_A4
@@ -131,6 +168,11 @@ def export_notes_to_pdf(notes, out_path, title="Prepoznate note"):
         c.drawString(LEFT_MARGIN, page_h - 35 * mm, "Nije prepoznata nijedna nota.")
         c.save()
         return
+
+    # Izračunaj trajanja za ritam
+    durations = [max(0.08, n["end"] - n["start"]) for n in usable_notes]
+    min_dur = min(durations)
+    max_dur = max(durations)
 
     usable_width = page_w - 2 * LEFT_MARGIN
     row_width = min(usable_width, NOTES_PER_ROW * NOTE_SPACING + CLEF_COLUMN_WIDTH)
@@ -160,7 +202,9 @@ def export_notes_to_pdf(notes, out_path, title="Prepoznate note"):
 
         x = LEFT_MARGIN + CLEF_COLUMN_WIDTH + col * NOTE_SPACING
         step, accidental = _pitch_to_step(n["note"])
-        _draw_note(c, x, y_bottom, step, accidental)
+        duration_sec = n["end"] - n["start"]
+        duration_type = _determine_note_duration(duration_sec, min_dur, max_dur)
+        _draw_note(c, x, y_bottom, step, accidental, duration_type)
 
         col += 1
 
