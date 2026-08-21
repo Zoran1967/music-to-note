@@ -93,3 +93,34 @@ class Routes:
     MIDI = "midi"
     RECORDINGS = "recordings"
     SETTINGS = "settings"
+
+
+# ---------------------------------------------------------------------------
+# GLOBAL APP SETTINGS (dodato za FAZU 4+)
+# ---------------------------------------------------------------------------
+class Settings:
+    """Centralna podešavanja koja utiču na analizu i prikaz."""
+
+    def __init__(self):
+        # Osetljivost detekcije (norm. autokorelacija prag)
+        # Veća vrednost = strožija detekcija (manje lažnih nota, ali može propustiti tihe tonove)
+        self.sensitivity = 0.35
+
+        # Transpozicija u polustepenima (-12 do +12)
+        self.transpose = 0
+
+        # Ključ notnog zapisa: "treble" (violinski), "bass" (bas), "both" (oba)
+        self.clef = "treble"
+
+        # Format PDF-a (za kasnije)
+        self.pdf_format = "A4"
+
+        # Automatsko brisanje privremenih fajlova posle analize
+        self.auto_delete_tmp = False
+
+    def reset_to_defaults(self):
+        self.__init__()
+
+
+# Globalna instanca podešavanja – dostupna svim modulima preko `from config import settings`
+settings = Settings()
