@@ -2,8 +2,8 @@
 """
 screens/sheet_music.py
 
-Upravljanje sačuvanim notnim zapisima.
-Koristi MDBoxLayout (stabilno) sa dugmićima za pregled, preimenovanje, brisanje, PDF i MIDI.
+FAZA 4: Upravljanje sačuvanim notnim zapisima.
+Vraćeno na stabilnu MDBoxLayout verziju. Dodat pregled nota i preimenovanje.
 """
 
 import os
@@ -28,7 +28,6 @@ class SheetMusicScreen(MDScreen):
     def build_ui(self):
         root = MDBoxLayout(orientation="vertical")
 
-        # Top bar
         top_bar = MDBoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -64,7 +63,6 @@ class SheetMusicScreen(MDScreen):
 
         root.add_widget(top_bar)
 
-        # Skrolabilni deo
         scroll = ScrollView()
         self.list_container = MDBoxLayout(
             orientation="vertical",
@@ -116,7 +114,7 @@ class SheetMusicScreen(MDScreen):
             self._add_entry_row(entry)
 
     def _add_entry_row(self, entry):
-        """Pravi red za jedan zapis sa svim akcijama."""
+        """Pravi red za jedan zapis (kao u originalu, radi 100%)."""
         row = MDBoxLayout(
             orientation="horizontal",
             spacing=dp(6),
@@ -124,20 +122,17 @@ class SheetMusicScreen(MDScreen):
             height=dp(52),
         )
 
-        # Naziv zapisa
-        name_label = MDLabel(
+        # Naziv zapisa (klik otvara pregled nota)
+        name_btn = MDFlatButton(
             text=entry["name"],
             font_size=14,
-            bold=True,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 1),
             size_hint_x=0.5,
             halign="left",
-            valign="center",
         )
-        # Klik na ime otvara pregled nota
-        name_label.bind(on_touch_down=lambda inst, touch, eid=entry["id"]: self._show_notes_dialog(eid) if inst.collide_point(*touch.pos) else None)
-        row.add_widget(name_label)
+        name_btn.bind(on_release=lambda inst, eid=entry["id"]: self._show_notes_dialog(eid))
+        row.add_widget(name_btn)
 
         # Dugme za pregled nota (Oko)
         view_btn = MDIconButton(
@@ -197,7 +192,7 @@ class SheetMusicScreen(MDScreen):
         self.list_container.add_widget(row)
 
     def _show_notes_dialog(self, entry_id):
-        """Prikazuje dijalog sa svim notama."""
+        """Prikazuje dijalog sa svim notama iz zapisa."""
         entry = self._get_app().sheet_storage.get_entry(entry_id)
         if not entry:
             return
