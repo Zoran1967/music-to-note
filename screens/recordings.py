@@ -25,6 +25,9 @@ from kivy.utils import platform
 from kivymd.uix.label import MDLabel
 from kivymd.uix.screen import MDScreen
 
+from config import settings  # dodato za transpoziciju
+from transcription.pitch_detection import transpose_note_name  # dodato
+
 
 def _app_dir(subfolder):
     from jnius import autoclass
@@ -186,6 +189,21 @@ class RecordingsScreen(MDScreen):
             lambda dt: self._analyze_wav(path, row_widget), 0
         )
 
+    def _apply_transpose(self, notes):
+        """Primeni transpoziciju iz podešavanja na listu nota."""
+        semitones = settings.transpose
+        if semitones == 0:
+            return notes
+        transposed = []
+        for n in notes:
+            transposed_note = transpose_note_name(n["note"], semitones)
+            transposed.append({
+                "note": transposed_note,
+                "start": n["start"],
+                "end": n["end"],
+            })
+        return transposed
+
     def _analyze_wav(self, wav_path, row_widget):
         row_widget.subtitle = "Analiziram... 0%"
 
@@ -206,7 +224,9 @@ class RecordingsScreen(MDScreen):
                     row_widget.subtitle = "Analiza zavrsena \u2014 {} nota".format(
                         len(detector.notes)
                     )
-                    self._show_results_popup(detector.notes, wav_path)
+                    # Primeni transpoziciju pre prikaza/exporta
+                    final_notes = self._apply_transpose(detector.notes)
+                    self._show_results_popup(final_notes, wav_path)
                     return False
             except Exception as e:
                 row_widget.subtitle = "Greska pri analizi: {}".format(e)
