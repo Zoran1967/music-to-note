@@ -2,7 +2,7 @@
 """
 android_storage.py
 Čuvanje fajlova u Android Downloads folder.
-Ispravljeno za Android 10+ (MediaStore) i starije verzije.
+Ispravljeno sa IS_PENDING za Android 10+.
 """
 
 import os
@@ -26,7 +26,7 @@ def save_to_downloads(temp_path, display_name, mime_type, callback=None):
             values.put(MediaStore.Downloads.DISPLAY_NAME, display_name)
             values.put(MediaStore.Downloads.MIME_TYPE, mime_type)
             values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-            # Dodato za Android 10+ (neophodno!)
+            # DODATO: Obavezno za Android 10+ da bi fajl bio vidljiv
             values.put(MediaStore.Downloads.IS_PENDING, 1)
 
             uri = context.getContentResolver().insert(MediaStore.EXTERNAL_CONTENT_URI, values)
@@ -46,7 +46,7 @@ def save_to_downloads(temp_path, display_name, mime_type, callback=None):
                 output_stream.close()
                 input_stream.close()
 
-                # Postavi IS_PENDING na 0 da "finalizuješ" fajl
+                # DODATO: Finalizuj fajl (postavi IS_PENDING na 0)
                 update_values = ContentValues()
                 update_values.put(MediaStore.Downloads.IS_PENDING, 0)
                 context.getContentResolver().update(uri, update_values, None, None)
