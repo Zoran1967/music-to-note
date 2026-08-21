@@ -11,6 +11,10 @@ scoped-storage/permission headaches).
 
 Every risky step is wrapped in try/except and reported directly in the
 list (as a message row) rather than crashing, per project strategy.
+
+NOTE: Analiza je trenutno omogućena samo za WAV fajlove. MP3/M4A
+dekodiranje kroz MediaCodec se pokazalo nestabilnim na nekim uređajima
+i biće rešeno kasnije.
 """
 
 import os
@@ -92,13 +96,15 @@ class RecordingsScreen(MDScreen):
 
     def _add_row(self, container, fname, full_path, label):
         size_kb = os.path.getsize(full_path) // 1024
-        can_analyze = fname.lower().endswith(
-            (".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac")
-        )
+        # Privremeno: samo WAV podržan za analizu (MediaCodec nije stabilan)
+        can_analyze = fname.lower().endswith(".wav")
 
         row = Factory.RecordingRow()
         row.filename = fname
-        row.subtitle = "{} \u2014 {} KB".format(label, size_kb)
+        if label == "Ucitano" and not can_analyze:
+            row.subtitle = "{} \u2014 {} KB (samo WAV analiza)".format(label, size_kb)
+        else:
+            row.subtitle = "{} \u2014 {} KB".format(label, size_kb)
         row.can_analyze = can_analyze
 
         row.ids.play_btn.bind(
@@ -177,44 +183,8 @@ class RecordingsScreen(MDScreen):
     def analyze_recording(self, path, row_widget):
         row_widget.subtitle = "Analiziram... 0%"
         Clock.schedule_once(
-            lambda dt: self._start_analysis(path, row_widget), 0
+            lambda dt: self._analyze_wav(path, row_widget), 0
         )
-
-    def _ensure_wav(self, path, row_widget, callback):
-        """Ako je WAV, vrati ga odmah. Ako nije, dekodiraj kroz MediaCodec."""
-        if path.lower().endswith(".wav"):
-            callback(path)
-            return
-
-        row_widget.subtitle = "Dekodiram... 0%"
-
-        from transcription.media_decode import decode_to_wav
-
-        tmp_dir = _app_dir("tmp_decode")
-        os.makedirs(tmp_dir, exist_ok=True)
-        base = os.path.splitext(os.path.basename(path))[0]
-        wav_path = os.path.join(tmp_dir, base + "_decoded.wav")
-
-        def _on_progress(progress):
-            row_widget.subtitle = "Dekodiram... {}%".format(int(progress * 100))
-
-        def _on_decode_done(success, message):
-            if success:
-                row_widget.subtitle = "Dekodiranje završeno"
-                callback(wav_path)
-            else:
-                row_widget.subtitle = "Greska pri dekodiranju: {}".format(message)
-
-        decode_to_wav(
-            path,
-            wav_path,
-            callback=_on_decode_done,
-            progress_callback=_on_progress,
-            timeout=60,
-        )
-
-    def _start_analysis(self, path, row_widget):
-        self._ensure_wav(path, row_widget, lambda wav_path: self._analyze_wav(wav_path, row_widget))
 
     def _analyze_wav(self, wav_path, row_widget):
         row_widget.subtitle = "Analiziram... 0%"
