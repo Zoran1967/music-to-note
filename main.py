@@ -3,15 +3,32 @@
 main.py
 
 Glavna ulazna tačka aplikacije Music to Note.
-Sigurna verzija - preskače ekrane koji ne postoje i ne učitava KV fajlove.
+Bezbedno učitava KV fajlove i ekrane.
 """
 
 import os
+from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager
+from kivy.uix.label import Label
 from kivymd.app import MDApp
 
 # Import storage-a
 from storage import SheetStorage
+
+
+def load_kv_files():
+    """
+    Bezbedno učitava sve KV fajlove iz foldera 'kv'.
+    Ako neki fajl ima grešku, preskače ga (ne ruši aplikaciju).
+    """
+    kv_dir = "kv"
+    if os.path.exists(kv_dir):
+        for filename in os.listdir(kv_dir):
+            if filename.endswith(".kv"):
+                try:
+                    Builder.load_file(os.path.join(kv_dir, filename))
+                except Exception as e:
+                    print(f"Upozorenje: Nisam mogao da učitam {filename}. Greška: {e}")
 
 
 class MusicToNoteApp(MDApp):
@@ -25,7 +42,10 @@ class MusicToNoteApp(MDApp):
         self.theme_cls.primary_palette = "DeepPurple"
         self.theme_cls.theme_style = "Dark"
 
-        # Pronađi folder za čuvanje podataka (Android ili Desktop)
+        # 1. Prvo učitaj sve KV fajlove (da ekrani imaju izgled!)
+        load_kv_files()
+
+        # 2. Pronađi folder za čuvanje podataka (Android ili Desktop)
         try:
             from jnius import autoclass
             PythonActivity = autoclass("org.kivy.android.PythonActivity")
@@ -37,10 +57,10 @@ class MusicToNoteApp(MDApp):
 
         self.sheet_storage = SheetStorage(app_dir)
 
-        # Kreiraj ScreenManager
+        # 3. Kreiraj ScreenManager
         self.screen_manager = ScreenManager()
 
-        # Pokušaj da importuješ i dodaš ekrane (preskači one koji ne postoje)
+        # 4. Pokušaj da importuješ i dodaš ekrane (preskači one koji ne postoje)
         try:
             from screens.home import HomeScreen
             self.screen_manager.add_widget(HomeScreen(name="home"))
@@ -71,11 +91,11 @@ class MusicToNoteApp(MDApp):
         except Exception as e:
             print(f"Upozorenje: SettingsScreen nije dodat. Greška: {e}")
 
-        # Ako nijedan ekran nije dodat, dodaj prazan
+        # 5. Ako nijedan ekran nije dodat, prikaži poruku
         if len(self.screen_manager.screens) == 0:
-            from kivy.uix.label import Label
             self.screen_manager.add_widget(Label(text="Nema ekrana!"))
 
+        # 6. Vrati ScreenManager
         return self.screen_manager
 
     def go_back(self):
