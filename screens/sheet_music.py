@@ -5,11 +5,9 @@ screens/sheet_music.py
 FAZA 4: Upravljanje sačuvanim notnim zapisima.
 Svaki zapis je MDCard sa imenom, pregledom nota, preimenovanjem,
 brisanjem i izvozom (PDF i MIDI).
-
-Lista se čuva u `app.sheet_storage` (JSON fajl u privatnom direktorijumu).
 """
 
-import os  # Neophodan za _get_app_dir
+import os
 
 from kivy.metrics import dp
 from kivy.uix.scrollview import ScrollView
@@ -19,7 +17,7 @@ from kivymd.uix.label import MDLabel
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.textfield import MDTextField
-from kivymd.uix.card import MDCard  # Dodato za karticu
+from kivymd.uix.card import MDCard
 
 from config import COLORS, hex_to_rgba
 
@@ -31,10 +29,9 @@ class SheetMusicScreen(MDScreen):
         self.build_ui()
 
     def build_ui(self):
-        # Glavni vertikalni layout
         root = MDBoxLayout(orientation="vertical")
 
-        # Top bar (Malo smanjen i sa pravilnim razmacima)
+        # Top bar
         top_bar = MDBoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -56,12 +53,12 @@ class SheetMusicScreen(MDScreen):
 
         title = MDLabel(
             text="Moji notni zapisi",
-            font_style="H6",  # Manji font, ne prevelik
+            font_style="H6",
             bold=True,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 1),
             halign="center",
-            size_hint_x=1,  # Pravilno centriranje
+            size_hint_x=1,
         )
         top_bar.add_widget(title)
 
@@ -70,7 +67,7 @@ class SheetMusicScreen(MDScreen):
 
         root.add_widget(top_bar)
 
-        # Skrolabilni deo sa listom zapisa
+        # Skrolabilni deo
         scroll = ScrollView()
         self.list_container = MDBoxLayout(
             orientation="vertical",
@@ -87,7 +84,6 @@ class SheetMusicScreen(MDScreen):
         self.refresh_list()
 
     def refresh_list(self):
-        """Ponovo iscrtaj listu iz app.sheet_storage."""
         self.list_container.clear_widgets()
 
         app = self._get_app()
@@ -123,16 +119,16 @@ class SheetMusicScreen(MDScreen):
             self._add_entry_card(entry)
 
     def _add_entry_card(self, entry):
-        """Pravi karticu za jedan zapis."""
+        """Pravi karticu za jedan zapis sa imenom, notama i akcijama."""
         
-        # Klik na celu karticu otvara pregled nota
+        # Karticu sada postavljamo vertikalno da stane i ime i note
         card = MDCard(
-            orientation="horizontal",
+            orientation="vertical",
             size_hint_y=None,
-            height=dp(64),
+            height=dp(90),
             radius=[dp(8), dp(8), dp(8), dp(8)],
             elevation=2,
-            padding=[dp(12), dp(4)],
+            padding=[dp(12), dp(8)],
             on_release=lambda inst, eid=entry["id"]: self._show_notes_dialog(eid),
         )
 
@@ -144,21 +140,43 @@ class SheetMusicScreen(MDScreen):
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 1),
             halign="left",
-            valign="center",
-            size_hint_x=0.5,
+            size_hint_y=None,
+            height=dp(24),
         )
         card.add_widget(name_label)
 
-        # Red sa ikonicama
+        # Pregled nota (ono što ti nedostaje!)
+        notes = entry.get("notes", [])
+        if notes:
+            # Prikaži prvih 5 nota, pa "..." ako ima više
+            note_names = [n.get("note", "?") for n in notes[:5]]
+            preview_text = ", ".join(note_names)
+            if len(notes) > 5:
+                preview_text += "..."
+            preview_text += f" ({len(notes)} nota)"
+        else:
+            preview_text = "Nema nota"
+
+        notes_label = MDLabel(
+            text=preview_text,
+            font_size=13,
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["text_dim"], 0.8),
+            halign="left",
+            size_hint_y=None,
+            height=dp(20),
+        )
+        card.add_widget(notes_label)
+
+        # Red sa ikonicama (akcije)
         action_box = MDBoxLayout(
             orientation="horizontal",
-            size_hint_x=None,
-            width=dp(180),  # Dovoljno za 5 ikonica
+            size_hint_y=None,
+            height=dp(32),
             spacing=dp(2),
-            pos_hint={"center_y": 0.5},
         )
 
-        # 1. Ikona za pregled nota (Oko)
+        # 1. Pregled nota (Oko)
         view_btn = MDIconButton(
             icon="eye-outline",
             theme_text_color="Custom",
@@ -169,7 +187,7 @@ class SheetMusicScreen(MDScreen):
         view_btn.bind(on_release=lambda inst, eid=entry["id"]: self._show_notes_dialog(eid))
         action_box.add_widget(view_btn)
 
-        # 2. Ikona za preimenovanje (Olovka)
+        # 2. Preimenovanje (Olovka)
         rename_btn = MDIconButton(
             icon="pencil-outline",
             theme_text_color="Custom",
@@ -180,7 +198,7 @@ class SheetMusicScreen(MDScreen):
         rename_btn.bind(on_release=lambda inst, eid=entry["id"]: self._on_name_click(inst, eid))
         action_box.add_widget(rename_btn)
 
-        # 3. Ikona za brisanje (Kanta)
+        # 3. Brisanje (Kanta)
         delete_btn = MDIconButton(
             icon="trash-can-outline",
             theme_text_color="Custom",
@@ -191,7 +209,7 @@ class SheetMusicScreen(MDScreen):
         delete_btn.bind(on_release=lambda inst, eid=entry["id"]: self._delete_entry(eid))
         action_box.add_widget(delete_btn)
 
-        # 4. Ikona za PDF
+        # 4. PDF
         export_pdf_btn = MDIconButton(
             icon="file-pdf-box",
             theme_text_color="Custom",
@@ -202,7 +220,7 @@ class SheetMusicScreen(MDScreen):
         export_pdf_btn.bind(on_release=lambda inst, eid=entry["id"]: self._export_entry_pdf(eid))
         action_box.add_widget(export_pdf_btn)
 
-        # 5. Ikona za MIDI
+        # 5. MIDI
         export_midi_btn = MDIconButton(
             icon="music-note",
             theme_text_color="Custom",
@@ -217,7 +235,6 @@ class SheetMusicScreen(MDScreen):
         self.list_container.add_widget(card)
 
     def _show_notes_dialog(self, entry_id):
-        """Prikazuje dijalog sa svim notama iz zapisa."""
         entry = self._get_app().sheet_storage.get_entry(entry_id)
         if not entry:
             return
@@ -229,7 +246,6 @@ class SheetMusicScreen(MDScreen):
             adaptive_height=True,
         )
 
-        # Skrolabilna lista nota
         scroll = ScrollView()
         notes_box = MDBoxLayout(
             orientation="vertical",
@@ -285,7 +301,6 @@ class SheetMusicScreen(MDScreen):
         return False
 
     def _on_name_click(self, instance, entry_id):
-        """Otvara dijalog za preimenovanje (sada pozvan klikom na olovku)."""
         entry = self._get_app().sheet_storage.get_entry(entry_id)
         if not entry:
             return
@@ -330,19 +345,16 @@ class SheetMusicScreen(MDScreen):
             self.refresh_list()
 
     def _delete_entry(self, entry_id):
-        """Obriši zapis i osveži listu."""
         self._get_app().sheet_storage.delete_entry(entry_id)
         self.refresh_list()
 
     def _export_entry_pdf(self, entry_id):
-        """Eksportuj PDF za dati zapis."""
         entry = self._get_app().sheet_storage.get_entry(entry_id)
         if not entry:
             return
         try:
             from transcription.notation_pdf import export_notes_to_pdf
             from android_storage import save_to_downloads
-            from kivy.clock import Clock
 
             base = entry["name"].replace(" ", "_")
             display_name = "{}.pdf".format(base)
@@ -355,7 +367,7 @@ class SheetMusicScreen(MDScreen):
                 entry["notes"],
                 tmp_path,
                 title=entry["name"],
-                clef=None  # koristi globalno podešavanje
+                clef=None
             )
 
             def _on_done(success, message):
@@ -366,7 +378,6 @@ class SheetMusicScreen(MDScreen):
             print("Greška pri PDF exportu:", e)
 
     def _export_entry_midi(self, entry_id):
-        """Eksportuj MIDI za dati zapis."""
         entry = self._get_app().sheet_storage.get_entry(entry_id)
         if not entry:
             return
