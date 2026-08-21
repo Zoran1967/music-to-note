@@ -25,8 +25,8 @@ from kivy.utils import platform
 from kivymd.uix.label import MDLabel
 from kivymd.uix.screen import MDScreen
 
-from config import settings  # dodato za transpoziciju i ključ
-from transcription.pitch_detection import transpose_note_name  # dodato
+from config import settings
+from transcription.pitch_detection import transpose_note_name
 
 
 def _app_dir(subfolder):
@@ -290,12 +290,12 @@ class RecordingsScreen(MDScreen):
             )
 
             show_sheet_btn = MDRaisedButton(
-                text="Prikaži notni zapis",
+                text="Sačuvaj u notne zapise",
                 size_hint_y=None,
                 height="40dp",
             )
             show_sheet_btn.bind(
-                on_release=lambda inst: self._show_sheet_music(notes, source_path)
+                on_release=lambda inst: self._save_to_sheet_music(notes, source_path)
             )
             btn_row.add_widget(show_sheet_btn)
 
@@ -333,21 +333,23 @@ class RecordingsScreen(MDScreen):
 
         popup.open()
 
-    def _show_sheet_music(self, notes, source_path):
-        """Otvara SheetMusicScreen sa prepoznatim notama."""
+    def _save_to_sheet_music(self, notes, source_path):
+        """Dodaje novi zapis u SheetStorage i otvara SheetMusicScreen."""
         try:
             from kivy.app import App
-
             app = App.get_running_app()
-            sheet_screen = app.root.get_screen("sheet_music")
-            sheet_screen.set_notes(notes)
+            if not hasattr(app, "sheet_storage"):
+                print("Sheet storage nije inicijalizovan")
+                return
+
+            # Dodaj zapis sa podrazumevanim imenom "Zapis N"
+            entry = app.sheet_storage.add_entry(notes)
+            print("Sačuvan zapis:", entry["name"])
+
+            # Navigiraj na SheetMusicScreen (lista)
             app.root.current = "sheet_music"
         except Exception as e:
-            container = self.ids.get("list_container")
-            if container is not None:
-                container.add_widget(
-                    self._make_message("Greska pri prikazu nota: {}".format(e))
-                )
+            print("Greška pri čuvanju u notne zapise:", e)
 
     def _export_pdf(self, notes, source_path, status_label):
         try:
@@ -361,7 +363,6 @@ class RecordingsScreen(MDScreen):
             os.makedirs(tmp_dir, exist_ok=True)
             tmp_path = os.path.join(tmp_dir, display_name)
 
-            # Prosledi podešeni ključ
             export_notes_to_pdf(notes, tmp_path, title="Note - {}".format(base), clef=settings.clef)
             status_label.text = "Cuvam u Download..."
 
