@@ -9,6 +9,12 @@ Sada sa RITMOM: note imaju trajanje (osmine, četvrtine, polovine)
 proporcionalno njihovom trajanju u sekundama. Duža nota = duže
 trajanje. Sistem radi bez poznatog tempa tako što normalizuje
 trajanja na najčešće muzičke vrednosti.
+
+PODRŠKA ZA KLJUČEVE:
+- "treble" (violinski)
+- "bass" (bas)
+- "both" (oba sistema, note raspoređene po visini)
+Koristi globalno podešavanje `settings.clef` iz config.py.
 """
 
 from transcription.simple_pdf import SimplePDFCanvas, PAGE_A4
@@ -29,8 +35,8 @@ NOTES_PER_ROW = 12
 ROW_PITCH = 10 * STAFF_LINE_GAP  # vertical distance between successive staff rows
 
 
-def _pitch_to_step(note_name):
-    """'A4' -> (step, accidental). Step 0 = bottom staff line (E4)."""
+def _pitch_to_step(note_name, clef="treble"):
+    """'A4' -> (step, accidental). Step 0 = bottom staff line for given clef."""
     letter = note_name[0]
     rest = note_name[1:]
     accidental = ""
@@ -43,10 +49,43 @@ def _pitch_to_step(note_name):
         octave = 4
 
     letter_index = NOTE_LETTERS.index(letter)
-    ref_letter_index = NOTE_LETTERS.index("E")
-    ref_octave = 4
+
+    if clef == "treble":
+        # Donja linija je E4
+        ref_letter_index = NOTE_LETTERS.index("E")
+        ref_octave = 4
+    elif clef == "bass":
+        # Donja linija je G2
+        ref_letter_index = NOTE_LETTERS.index("G")
+        ref_octave = 2
+    else:
+        # Podrazumevano treble
+        ref_letter_index = NOTE_LETTERS.index("E")
+        ref_octave = 4
+
     step = (octave - ref_octave) * 7 + (letter_index - ref_letter_index)
     return step, accidental
+
+
+def _note_midi(note_name):
+    """Pretvori naziv note u MIDI broj."""
+    letter = note_name[0]
+    rest = note_name[1:]
+    accidental = ""
+    if rest and rest[0] in "#b":
+        accidental = rest[0]
+        rest = rest[1:]
+    try:
+        octave = int(rest)
+    except (ValueError, IndexError):
+        octave = 4
+
+    midi = (octave + 1) * 12 + NOTE_LETTERS.index(letter)
+    if accidental == "#":
+        midi += 1
+    elif accidental == "b":
+        midi -= 1
+    return midi
 
 
 def _determine_note_duration(duration_sec, min_dur, max_dur):
@@ -58,7 +97,6 @@ def _determine_note_duration(duration_sec, min_dur, max_dur):
     if max_dur <= min_dur or duration_sec <= 0:
         return "quarter", False
 
-    # Normalizuj na opseg [0, 1]
     normalized = (duration_sec - min_dur) / (max_dur - min_dur)
 
     if normalized < 0.15:
@@ -95,6 +133,23 @@ def _draw_treble_clef(c, x, y_bottom):
     c.restoreState()
 
 
+def _draw_bass_clef(c, x, y_bottom):
+    """Pojednostavljen bas ključ."""
+    c.saveState()
+    c.setLineWidth(1.4)
+    cx = x + 4 * mm
+    # Glavni luk
+    p = c.beginPath()
+    p.moveTo(cx, y_bottom + 2 * STAFF_LINE_GAP)
+    p.curveTo(cx - 2 * mm, y_bottom + 3 * STAFF_LINE_GAP, cx - 2 * mm, y_bottom + 0.5 * STAFF_LINE_GAP, cx, y_bottom + 0.5 * STAFF_LINE_GAP)
+    p.curveTo(cx + 2 * mm, y_bottom + 0.5 * STAFF_LINE_GAP, cx + 2 * mm, y_bottom + 3 * STAFF_LINE_GAP, cx, y_bottom + 3 * STAFF_LINE_GAP)
+    c.drawPath(p, stroke=1, fill=0)
+    # Dve tačke
+    c.circle(cx - 2 * mm, y_bottom + 1.0 * STAFF_LINE_GAP, 1.0 * mm, stroke=1, fill=1)
+    c.circle(cx + 2 * mm, y_bottom - 0.2 * STAFF_LINE_GAP, 1.0 * mm, stroke=1, fill=1)
+    c.restoreState()
+
+
 def _draw_note(c, x, y_bottom, step, accidental, duration_type="quarter"):
     """Crta notu sa odgovarajućim trajanjem."""
     y = y_bottom + step * STEP_HEIGHT
@@ -115,7 +170,6 @@ def _draw_note(c, x, y_bottom, step, accidental, duration_type="quarter"):
                 c.line(x - 3 * mm, ly, x + 3 * mm, ly)
             s += 2
 
-    # Crtanje note zavisi od trajanja
     rx, ry = 2.2 * mm, 1.6 * mm
     c.setFillColorRGB(0, 0, 0)
 
@@ -123,27 +177,21 @@ def _draw_note(c, x, y_bottom, step, accidental, duration_type="quarter"):
     c.ellipse(x - rx, y - ry, x + rx, y + ry, fill=1, stroke=0)
 
     # Vrat note
-    if duration_type in ("whole",):
-        # Cela nota nema vrat
-        pass
-    else:
+    if duration_type not in ("whole",):
         if step >= 4:
             c.line(x - rx, y, x - rx, y - 8 * mm)
         else:
             c.line(x + rx, y, x + rx, y + 8 * mm)
 
     # Dodatne oznake za trajanje
-    if duration_type in ("half",):
-        # Polovina: šuplja nota (samo obris)
+    if duration_type == "half":
         c.setFillColorRGB(1, 1, 1)
         c.ellipse(x - rx, y - ry, x + rx, y + ry, fill=1, stroke=1)
     elif duration_type in ("eighth", "sixteenth"):
-        # Osmina/šesnaestina: barjak na vratu
         flag_x = x + rx if step < 4 else x - rx
         flag_y = y + 8 * mm if step < 4 else y - 8 * mm
         c.line(flag_x, flag_y, flag_x + 3 * mm, flag_y - 2 * mm)
 
-    # Akcidental
     if accidental == "#":
         c.setFont("Helvetica-Bold", 10)
         c.drawString(x - 7 * mm, y - 2 * mm, "#")
@@ -152,9 +200,15 @@ def _draw_note(c, x, y_bottom, step, accidental, duration_type="quarter"):
         c.drawString(x - 7 * mm, y - 2 * mm, "b")
 
 
-def export_notes_to_pdf(notes, out_path, title="Prepoznate note"):
-    """notes: list of dicts with 'note', 'start', 'end' keys.
-    Writes a PDF to out_path with ritam (trajanje nota)."""
+def export_notes_to_pdf(notes, out_path, title="Prepoznate note", clef=None):
+    """
+    notes: list of dicts with 'note', 'start', 'end' keys.
+    clef: "treble", "bass", "both" (ako nije prosleđen, koristi settings.clef)
+    """
+    if clef is None:
+        from config import settings
+        clef = settings.clef
+
     usable_notes = [n for n in notes if n.get("note")]
 
     page_w, page_h = PAGE_A4
@@ -177,35 +231,70 @@ def export_notes_to_pdf(notes, out_path, title="Prepoznate note"):
     usable_width = page_w - 2 * LEFT_MARGIN
     row_width = min(usable_width, NOTES_PER_ROW * NOTE_SPACING + CLEF_COLUMN_WIDTH)
 
-    row = 0
-    col = 0
+    # Pripremi liste nota po sistemima
+    if clef == "both":
+        treble_notes = [n for n in usable_notes if _note_midi(n["note"]) >= 60]
+        bass_notes = [n for n in usable_notes if _note_midi(n["note"]) < 60]
+        systems = []
+        if treble_notes:
+            systems.append(("treble", treble_notes))
+        if bass_notes:
+            systems.append(("bass", bass_notes))
+        if not systems:
+            systems = [("treble", usable_notes)]  # ako su sve note van očekivanog
+    else:
+        systems = [(clef, usable_notes)]
+
     y_top_row = page_h - 40 * mm
+    y_current = y_top_row
 
-    for n in usable_notes:
-        if col >= NOTES_PER_ROW:
-            col = 0
-            row += 1
+    for sys_clef, sys_notes in systems:
+        row = 0
+        col = 0
 
-        y_bottom = y_top_row - row * ROW_PITCH
-        if y_bottom < 30 * mm:
-            c.showPage()
-            c.setFont("Helvetica-Bold", 14)
-            c.drawString(LEFT_MARGIN, page_h - 20 * mm, title + " (nastavak)")
-            row = 0
-            col = 0
-            y_top_row = page_h - 40 * mm
-            y_bottom = y_top_row
+        # Naslov sistema (samo ako ima više sistema)
+        if clef == "both" and len(systems) > 1:
+            c.setFont("Helvetica-Bold", 11)
+            if sys_clef == "treble":
+                c.drawString(LEFT_MARGIN, y_current, "Violinski ključ")
+            else:
+                c.drawString(LEFT_MARGIN, y_current, "Bas ključ")
+            y_current -= 8 * mm
 
-        if col == 0:
-            _draw_staff(c, LEFT_MARGIN, y_bottom, row_width)
-            _draw_treble_clef(c, LEFT_MARGIN + 2 * mm, y_bottom)
+        for n in sys_notes:
+            if col >= NOTES_PER_ROW:
+                col = 0
+                row += 1
 
-        x = LEFT_MARGIN + CLEF_COLUMN_WIDTH + col * NOTE_SPACING
-        step, accidental = _pitch_to_step(n["note"])
-        duration_sec = n["end"] - n["start"]
-        duration_type = _determine_note_duration(duration_sec, min_dur, max_dur)
-        _draw_note(c, x, y_bottom, step, accidental, duration_type)
+            y_bottom = y_current - row * ROW_PITCH
+            if y_bottom < 30 * mm:
+                c.showPage()
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(LEFT_MARGIN, page_h - 20 * mm, title + " (nastavak)")
+                y_current = page_h - 40 * mm
+                row = 0
+                col = 0
+                y_bottom = y_current
 
-        col += 1
+            if col == 0:
+                _draw_staff(c, LEFT_MARGIN, y_bottom, row_width)
+                if sys_clef == "treble":
+                    _draw_treble_clef(c, LEFT_MARGIN + 2 * mm, y_bottom)
+                else:
+                    _draw_bass_clef(c, LEFT_MARGIN + 2 * mm, y_bottom)
+
+            x = LEFT_MARGIN + CLEF_COLUMN_WIDTH + col * NOTE_SPACING
+            step, accidental = _pitch_to_step(n["note"], clef=sys_clef)
+            duration_sec = n["end"] - n["start"]
+            duration_type = _determine_note_duration(duration_sec, min_dur, max_dur)
+            _draw_note(c, x, y_bottom, step, accidental, duration_type)
+
+            col += 1
+
+        # Sledeći sistem počinje niže
+        if len(systems) > 1 and sys_clef == "treble":
+            y_current = y_current - (row + 2) * ROW_PITCH
+        else:
+            y_current = y_current - (row + 1) * ROW_PITCH
 
     c.save()
