@@ -25,7 +25,7 @@ from kivy.utils import platform
 from kivymd.uix.label import MDLabel
 from kivymd.uix.screen import MDScreen
 
-from config import settings  # dodato za transpoziciju
+from config import settings  # dodato za transpoziciju i ključ
 from transcription.pitch_detection import transpose_note_name  # dodato
 
 
@@ -361,7 +361,8 @@ class RecordingsScreen(MDScreen):
             os.makedirs(tmp_dir, exist_ok=True)
             tmp_path = os.path.join(tmp_dir, display_name)
 
-            export_notes_to_pdf(notes, tmp_path, title="Note - {}".format(base))
+            # Prosledi podešeni ključ
+            export_notes_to_pdf(notes, tmp_path, title="Note - {}".format(base), clef=settings.clef)
             status_label.text = "Cuvam u Download..."
 
             def _on_done(success, message):
