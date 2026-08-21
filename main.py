@@ -49,6 +49,10 @@ def _build_real_app(app):
     from screens.recordings import RecordingsScreen
     from screens.settings import SettingsScreen
 
+    # Inicijalizuj globalno skladište za notne zapise
+    from storage import SheetStorage
+    app.sheet_storage = SheetStorage()
+
     app.cfg = cfg
     app.title = cfg.APP_NAME
 
