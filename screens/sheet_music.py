@@ -3,8 +3,8 @@
 screens/sheet_music.py
 
 FAZA 4: Upravljanje sačuvanim notnim zapisima.
-Svaki zapis ima redni broj, naziv (koji se može menjati), dugme za
-brisanje i dugme za izvoz (PDF i MIDI).
+Svaki zapis je MDCard sa imenom, pregledom nota, preimenovanjem,
+brisanjem i izvozom (PDF i MIDI).
 
 Lista se čuva u `app.sheet_storage` (JSON fajl u privatnom direktorijumu).
 """
@@ -12,7 +12,6 @@ Lista se čuva u `app.sheet_storage` (JSON fajl u privatnom direktorijumu).
 import os  # Neophodan za _get_app_dir
 
 from kivy.metrics import dp
-from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
@@ -20,6 +19,7 @@ from kivymd.uix.label import MDLabel
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.textfield import MDTextField
+from kivymd.uix.card import MDCard  # Dodato za karticu
 
 from config import COLORS, hex_to_rgba
 
@@ -34,12 +34,12 @@ class SheetMusicScreen(MDScreen):
         # Glavni vertikalni layout
         root = MDBoxLayout(orientation="vertical")
 
-        # Top bar
+        # Top bar (Malo smanjen i sa pravilnim razmacima)
         top_bar = MDBoxLayout(
             orientation="horizontal",
             size_hint_y=None,
-            height=dp(50),
-            padding=[dp(8), dp(4)],
+            height=dp(56),
+            padding=[dp(8), dp(8)],
         )
 
         back_btn = MDLabel(
@@ -56,11 +56,12 @@ class SheetMusicScreen(MDScreen):
 
         title = MDLabel(
             text="Moji notni zapisi",
-            font_style="H6",
+            font_style="H6",  # Manji font, ne prevelik
             bold=True,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 1),
             halign="center",
+            size_hint_x=1,  # Pravilno centriranje
         )
         top_bar.add_widget(title)
 
@@ -74,7 +75,7 @@ class SheetMusicScreen(MDScreen):
         self.list_container = MDBoxLayout(
             orientation="vertical",
             padding=[dp(12), dp(8)],
-            spacing=dp(8),
+            spacing=dp(10),
             adaptive_height=True,
         )
         scroll.add_widget(self.list_container)
@@ -119,64 +120,159 @@ class SheetMusicScreen(MDScreen):
             return
 
         for entry in entries:
-            self._add_entry_row(entry)
+            self._add_entry_card(entry)
 
-    def _add_entry_row(self, entry):
-        """Pravi red za jedan zapis."""
-        row = MDBoxLayout(
+    def _add_entry_card(self, entry):
+        """Pravi karticu za jedan zapis."""
+        
+        # Klik na celu karticu otvara pregled nota
+        card = MDCard(
             orientation="horizontal",
-            spacing=dp(6),
             size_hint_y=None,
-            height=dp(52),
+            height=dp(64),
+            radius=[dp(8), dp(8), dp(8), dp(8)],
+            elevation=2,
+            padding=[dp(12), dp(4)],
+            on_release=lambda inst, eid=entry["id"]: self._show_notes_dialog(eid),
         )
 
-        # Naziv zapisa (klik za preimenovanje) — sada kao dugme da klik sigurno radi
-        name_btn = MDFlatButton(
+        # Ime zapisa
+        name_label = MDLabel(
             text=entry["name"],
-            font_size=14,
+            font_size=16,
+            bold=True,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 1),
-            size_hint_x=0.5,
             halign="left",
             valign="center",
+            size_hint_x=0.5,
         )
-        name_btn.bind(on_release=lambda inst, eid=entry["id"]: self._on_name_click(inst, eid))
-        row.add_widget(name_btn)
+        card.add_widget(name_label)
 
-        # Dugme za brisanje
+        # Red sa ikonicama
+        action_box = MDBoxLayout(
+            orientation="horizontal",
+            size_hint_x=None,
+            width=dp(180),  # Dovoljno za 5 ikonica
+            spacing=dp(2),
+            pos_hint={"center_y": 0.5},
+        )
+
+        # 1. Ikona za pregled nota (Oko)
+        view_btn = MDIconButton(
+            icon="eye-outline",
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["white"], 0.8),
+            size_hint_x=None,
+            width=dp(32),
+        )
+        view_btn.bind(on_release=lambda inst, eid=entry["id"]: self._show_notes_dialog(eid))
+        action_box.add_widget(view_btn)
+
+        # 2. Ikona za preimenovanje (Olovka)
+        rename_btn = MDIconButton(
+            icon="pencil-outline",
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["white"], 0.8),
+            size_hint_x=None,
+            width=dp(32),
+        )
+        rename_btn.bind(on_release=lambda inst, eid=entry["id"]: self._on_name_click(inst, eid))
+        action_box.add_widget(rename_btn)
+
+        # 3. Ikona za brisanje (Kanta)
         delete_btn = MDIconButton(
             icon="trash-can-outline",
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["danger"], 1),
             size_hint_x=None,
-            width=dp(36),
+            width=dp(32),
         )
         delete_btn.bind(on_release=lambda inst, eid=entry["id"]: self._delete_entry(eid))
-        row.add_widget(delete_btn)
+        action_box.add_widget(delete_btn)
 
-        # Dugme za izvoz PDF
+        # 4. Ikona za PDF
         export_pdf_btn = MDIconButton(
             icon="file-pdf-box",
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["cyan"], 1),
             size_hint_x=None,
-            width=dp(36),
+            width=dp(32),
         )
         export_pdf_btn.bind(on_release=lambda inst, eid=entry["id"]: self._export_entry_pdf(eid))
-        row.add_widget(export_pdf_btn)
+        action_box.add_widget(export_pdf_btn)
 
-        # Dugme za izvoz MIDI
+        # 5. Ikona za MIDI
         export_midi_btn = MDIconButton(
             icon="music-note",
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["gold"], 1),
             size_hint_x=None,
-            width=dp(36),
+            width=dp(32),
         )
         export_midi_btn.bind(on_release=lambda inst, eid=entry["id"]: self._export_entry_midi(eid))
-        row.add_widget(export_midi_btn)
+        action_box.add_widget(export_midi_btn)
 
-        self.list_container.add_widget(row)
+        card.add_widget(action_box)
+        self.list_container.add_widget(card)
+
+    def _show_notes_dialog(self, entry_id):
+        """Prikazuje dijalog sa svim notama iz zapisa."""
+        entry = self._get_app().sheet_storage.get_entry(entry_id)
+        if not entry:
+            return
+
+        content = MDBoxLayout(
+            orientation="vertical",
+            spacing=dp(4),
+            padding=[dp(8), dp(8)],
+            adaptive_height=True,
+        )
+
+        # Skrolabilna lista nota
+        scroll = ScrollView()
+        notes_box = MDBoxLayout(
+            orientation="vertical",
+            adaptive_height=True,
+            spacing=dp(2),
+        )
+
+        if not entry["notes"]:
+            notes_box.add_widget(MDLabel(text="Nema nota u ovom zapisu."))
+        else:
+            for note in entry["notes"]:
+                note_text = "{}  {:.2f}s - {:.2f}s".format(
+                    note.get("note", "?"),
+                    note.get("start", 0.0),
+                    note.get("end", 0.0)
+                )
+                notes_box.add_widget(
+                    MDLabel(
+                        text=note_text,
+                        font_style="Body2",
+                        theme_text_color="Custom",
+                        text_color=hex_to_rgba(COLORS["white"], 0.9),
+                        size_hint_y=None,
+                        height=dp(24),
+                    )
+                )
+
+        scroll.add_widget(notes_box)
+        content.add_widget(scroll)
+
+        dialog = MDDialog(
+            title=entry["name"],
+            type="custom",
+            content_cls=content,
+            buttons=[
+                MDFlatButton(
+                    text="Zatvori",
+                    on_release=lambda inst: dialog.dismiss()
+                )
+            ],
+        )
+        dialog.open()
+        self.dialog = dialog
 
     def _get_app(self):
         from kivy.app import App
@@ -189,7 +285,7 @@ class SheetMusicScreen(MDScreen):
         return False
 
     def _on_name_click(self, instance, entry_id):
-        """Otvara dijalog za preimenovanje."""
+        """Otvara dijalog za preimenovanje (sada pozvan klikom na olovku)."""
         entry = self._get_app().sheet_storage.get_entry(entry_id)
         if not entry:
             return
@@ -222,7 +318,6 @@ class SheetMusicScreen(MDScreen):
                 ),
             ],
         )
-        # Dodaj text_field u content_cls
         dialog.content_cls.add_widget(text_field)
         dialog.open()
         self.dialog = dialog
