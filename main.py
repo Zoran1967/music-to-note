@@ -3,7 +3,7 @@
 main.py
 
 Glavna ulazna tačka aplikacije Music to Note.
-Bezbedno učitava KV fajlove i ekrane.
+Bezbedno učitava KV fajlove i ekrane, definiše cfg i navigaciju.
 """
 
 import os
@@ -12,19 +12,30 @@ from kivy.uix.screenmanager import ScreenManager
 from kivy.uix.label import Label
 from kivymd.app import MDApp
 
-# Import storage-a
+# Import konfiguracije i storage-a
+import config
 from storage import SheetStorage
 
 
 def load_kv_files():
     """
     Bezbedno učitava sve KV fajlove iz foldera 'kv'.
-    Ako neki fajl ima grešku, preskače ga (ne ruši aplikaciju).
+    Prvo učitava theme.kv (gde su definisani ActionCard i IconButton),
+    zatim ostale fajlove.
     """
     kv_dir = "kv"
     if os.path.exists(kv_dir):
+        # Prvo učitaj theme.kv ako postoji (važno za custom widgete)
+        theme_path = os.path.join(kv_dir, "theme.kv")
+        if os.path.exists(theme_path):
+            try:
+                Builder.load_file(theme_path)
+            except Exception as e:
+                print(f"Upozorenje: Nisam mogao da učitam theme.kv. Greška: {e}")
+
+        # Zatim učitaj sve ostale KV fajlove
         for filename in os.listdir(kv_dir):
-            if filename.endswith(".kv"):
+            if filename.endswith(".kv") and filename != "theme.kv":
                 try:
                     Builder.load_file(os.path.join(kv_dir, filename))
                 except Exception as e:
@@ -36,6 +47,8 @@ class MusicToNoteApp(MDApp):
         super().__init__(**kwargs)
         self.sheet_storage = None
         self.screen_manager = None
+        # Povezujemo konfiguraciju sa aplikacijom (da app.cfg radi u KV fajlovima)
+        self.cfg = config
 
     def build(self):
         # Podešavanje teme
@@ -74,6 +87,12 @@ class MusicToNoteApp(MDApp):
             print(f"Upozorenje: RecorderScreen nije dodat. Greška: {e}")
 
         try:
+            from screens.audio_import import AudioImportScreen
+            self.screen_manager.add_widget(AudioImportScreen(name="audio_import"))
+        except Exception as e:
+            print(f"Upozorenje: AudioImportScreen nije dodat. Greška: {e}")
+
+        try:
             from screens.recordings import RecordingsScreen
             self.screen_manager.add_widget(RecordingsScreen(name="recordings"))
         except Exception as e:
@@ -91,12 +110,26 @@ class MusicToNoteApp(MDApp):
         except Exception as e:
             print(f"Upozorenje: SettingsScreen nije dodat. Greška: {e}")
 
+        # Ako imaš i midi ekran, dodaj ga (ako postoji fajl)
+        try:
+            from screens.midi import MidiScreen
+            self.screen_manager.add_widget(MidiScreen(name="midi"))
+        except Exception as e:
+            print(f"Upozorenje: MidiScreen nije dodat. Greška: {e}")
+
         # 5. Ako nijedan ekran nije dodat, prikaži poruku
         if len(self.screen_manager.screens) == 0:
             self.screen_manager.add_widget(Label(text="Nema ekrana!"))
 
         # 6. Vrati ScreenManager
         return self.screen_manager
+
+    def go_to(self, screen_name):
+        """Funkcija za navigaciju na drugi ekran."""
+        if self.screen_manager.has_screen(screen_name):
+            self.screen_manager.current = screen_name
+        else:
+            print(f"Greška: Ekran '{screen_name}' ne postoji!")
 
     def go_back(self):
         if self.screen_manager.current != "home":
