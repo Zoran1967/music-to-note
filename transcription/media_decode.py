@@ -153,21 +153,28 @@ def _decode_worker(source_path, dest_path, callback, progress_callback, timeout)
                 input_index = codec.dequeueInputBuffer(10000)  # 10ms timeout
                 if input_index >= 0:
                     input_buffer = codec.getInputBuffer(input_index)
-                    sample_size = extractor.readSampleData(input_buffer, 0)
+                    if input_buffer is not None:
+                        # **KRITIČNO: resetuj bafer pre čitanja**
+                        input_buffer.clear()
+                        sample_size = extractor.readSampleData(input_buffer, 0)
 
-                    if sample_size < 0:
-                        codec.queueInputBuffer(
-                            input_index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                        )
-                        input_done = True
-                    else:
-                        presentation_time = extractor.getSampleTime()
-                        codec.queueInputBuffer(input_index, 0, sample_size, presentation_time, 0)
-                        extractor.advance()
+                        if sample_size < 0:
+                            codec.queueInputBuffer(
+                                input_index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                            )
+                            input_done = True
+                        else:
+                            presentation_time = extractor.getSampleTime()
+                            # **Podesi poziciju i limit za ono što je pročitano**
+                            input_buffer.position(0)
+                            input_buffer.limit(sample_size)
+                            codec.queueInputBuffer(
+                                input_index, 0, sample_size, presentation_time, 0
+                            )
+                            extractor.advance()
                 elif input_index == MediaCodec.INFO_TRY_AGAIN_LATER:
-                    pass  # nema slobodnog bafera, pokušaj kasnije
+                    pass
                 else:
-                    # Neočekivani negativan kod – pauza pa nastavi
                     time.sleep(0.005)
                     continue
 
@@ -175,14 +182,14 @@ def _decode_worker(source_path, dest_path, callback, progress_callback, timeout)
             output_index = codec.dequeueOutputBuffer(info, 10000)  # 10ms timeout
             if output_index >= 0:
                 output_buffer = codec.getOutputBuffer(output_index)
+                if output_buffer is not None:
+                    # **Podesi poziciju i limit za čitanje**
+                    output_buffer.position(info.offset)
+                    output_buffer.limit(info.offset + info.size)
 
-                # Kopiraj PCM podatke
-                output_buffer.position(info.offset)
-                output_buffer.limit(info.offset + info.size)
-
-                temp = bytearray(info.size)
-                output_buffer.get(temp, 0, info.size)
-                pcm_data.extend(temp)
+                    temp = bytearray(info.size)
+                    output_buffer.get(temp, 0, info.size)
+                    pcm_data.extend(temp)
 
                 last_presentation_time_us = info.presentationTimeUs
 
@@ -199,16 +206,12 @@ def _decode_worker(source_path, dest_path, callback, progress_callback, timeout)
                 if info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM:
                     output_done = True
             elif output_index == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED:
-                # Deprecated, ignorisano
                 pass
             elif output_index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED:
-                # Format se promenio (može se desiti)
                 pass
             elif output_index == MediaCodec.INFO_TRY_AGAIN_LATER:
-                # Nema izlaznog podatka trenutno, samo nastavi
                 pass
             else:
-                # Neočekivani negativan kod – pauza
                 time.sleep(0.005)
 
         codec.stop()
