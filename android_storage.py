@@ -23,11 +23,11 @@ def save_to_downloads(temp_path, display_name, mime_type, callback=None):
             FileInputStream = autoclass("java.io.FileInputStream")
 
             values = ContentValues()
-            values.put(MediaStore.Downloads.DISPLAY_NAME, display_name)
-            values.put(MediaStore.Downloads.MIME_TYPE, mime_type)
-            values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            values.put(MediaStore.DISPLAY_NAME, display_name)
+            values.put(MediaStore.MIME_TYPE, mime_type)
+            values.put(MediaStore.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
             # DODATO: Obavezno za Android 10+ da bi fajl bio vidljiv
-            values.put(MediaStore.Downloads.IS_PENDING, 1)
+            values.put(MediaStore.IS_PENDING, 1)
 
             uri = context.getContentResolver().insert(MediaStore.EXTERNAL_CONTENT_URI, values)
 
@@ -48,7 +48,7 @@ def save_to_downloads(temp_path, display_name, mime_type, callback=None):
 
                 # DODATO: Finalizuj fajl (postavi IS_PENDING na 0)
                 update_values = ContentValues()
-                update_values.put(MediaStore.Downloads.IS_PENDING, 0)
+                update_values.put(MediaStore.IS_PENDING, 0)
                 context.getContentResolver().update(uri, update_values, None, None)
 
                 if callback:
