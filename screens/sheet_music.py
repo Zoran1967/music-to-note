@@ -9,6 +9,8 @@ brisanje i dugme za izvoz (PDF i MIDI).
 Lista se čuva u `app.sheet_storage` (JSON fajl u privatnom direktorijumu).
 """
 
+import os  # Neophodan za _get_app_dir
+
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
@@ -128,18 +130,18 @@ class SheetMusicScreen(MDScreen):
             height=dp(52),
         )
 
-        # Naziv zapisa (klik za preimenovanje)
-        name_label = MDLabel(
+        # Naziv zapisa (klik za preimenovanje) — sada kao dugme da klik sigurno radi
+        name_btn = MDFlatButton(
             text=entry["name"],
-            font_style="Subtitle1",
+            font_size=14,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 1),
-            size_hint_x=0.5,  # zauzima prostor
+            size_hint_x=0.5,
             halign="left",
             valign="center",
         )
-        name_label.bind(on_touch_down=lambda inst, touch, eid=entry["id"]: self._on_name_click(inst, touch, eid) if inst.collide_point(*touch.pos) else False)
-        row.add_widget(name_label)
+        name_btn.bind(on_release=lambda inst, eid=entry["id"]: self._on_name_click(inst, eid))
+        row.add_widget(name_btn)
 
         # Dugme za brisanje
         delete_btn = MDIconButton(
@@ -186,7 +188,7 @@ class SheetMusicScreen(MDScreen):
             return True
         return False
 
-    def _on_name_click(self, instance, touch, entry_id):
+    def _on_name_click(self, instance, entry_id):
         """Otvara dijalog za preimenovanje."""
         entry = self._get_app().sheet_storage.get_entry(entry_id)
         if not entry:
@@ -246,7 +248,6 @@ class SheetMusicScreen(MDScreen):
             from transcription.notation_pdf import export_notes_to_pdf
             from android_storage import save_to_downloads
             from kivy.clock import Clock
-            import os
 
             base = entry["name"].replace(" ", "_")
             display_name = "{}.pdf".format(base)
@@ -277,7 +278,6 @@ class SheetMusicScreen(MDScreen):
         try:
             from transcription.midi_export import export_notes_to_midi
             from android_storage import save_to_downloads
-            import os
 
             base = entry["name"].replace(" ", "_")
             display_name = "{}.mid".format(base)
