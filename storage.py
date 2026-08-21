@@ -2,78 +2,77 @@
 """
 storage.py
 
-Jednostavno JSON skladište za sačuvane notne zapise (analize).
-Svaki zapis ima redni broj, naziv i listu nota.
-Podaci se čuvaju u privatnom direktorijumu aplikacije.
+Upravljanje čuvanjem notnih zapisa u JSON fajlu (sheet_entries.json).
+Ovaj fajl se čuva u privatnom Android direktorijumu.
 """
 
-import os
 import json
+import os
+import uuid
+from datetime import datetime
 
 
 class SheetStorage:
-    def __init__(self, data_dir=None):
-        if data_dir is None:
-            from jnius import autoclass
-            PythonActivity = autoclass("org.kivy.android.PythonActivity")
-            context = PythonActivity.mActivity
-            data_dir = context.getFilesDir().getAbsolutePath()
-        self.data_dir = data_dir
-        self.file_path = os.path.join(self.data_dir, "sheet_entries.json")
-        self.entries = self._load()
+    def __init__(self, storage_dir):
+        # storage_dir je putanja do foldera gde se čuvaju podaci
+        self.storage_dir = storage_dir
+        self.file_path = os.path.join(storage_dir, "sheet_entries.json")
+        self.entries = []
+        self.load()
 
-    def _load(self):
-        if not os.path.exists(self.file_path):
-            return []
+    def load(self):
+        """Učitava podatke iz JSON fajla ako postoji."""
+        if os.path.exists(self.file_path):
+            try:
+                with open(self.file_path, 'r', encoding='utf-8') as f:
+                    self.entries = json.load(f)
+            except Exception as e:
+                print(f"Greška pri učitavanju: {e}")
+                self.entries = []
+        else:
+            self.entries = []
+
+    def save(self):
+        """Čuva podatke u JSON fajl."""
         try:
-            with open(self.file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            # Osiguraj da su svi potrebni ključevi prisutni
-            for entry in data:
-                if "id" not in entry:
-                    entry["id"] = len(data) + 1
-                if "name" not in entry:
-                    entry["name"] = "Zapis {}".format(entry["id"])
-                if "notes" not in entry:
-                    entry["notes"] = []
-            return data
-        except Exception:
-            return []
+            with open(self.file_path, 'w', encoding='utf-8') as f:
+                json.dump(self.entries, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            print(f"Greška pri čuvanju: {e}")
 
-    def _save(self):
-        try:
-            with open(self.file_path, "w", encoding="utf-8") as f:
-                json.dump(self.entries, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
-
-    def add_entry(self, notes, name=None):
-        # Generiši redni broj (najveći postojeći + 1)
-        next_id = max([e.get("id", 0) for e in self.entries], default=0) + 1
-        if name is None:
-            name = "Zapis {}".format(next_id)
-        entry = {"id": next_id, "name": name, "notes": notes}
+    def add_entry(self, name, notes):
+        """Dodaje novi notni zapis."""
+        entry = {
+            "id": str(uuid.uuid4()),  # Jedinstveni ID
+            "name": name,
+            "notes": notes,          # Lista nota
+            "created": datetime.now().isoformat()
+        }
         self.entries.append(entry)
-        self._save()
+        self.save()
         return entry
 
     def delete_entry(self, entry_id):
-        self.entries = [e for e in self.entries if e.get("id") != entry_id]
-        self._save()
+        """Briše zapis po ID-ju."""
+        self.entries = [e for e in self.entries if e["id"] != entry_id]
+        self.save()
 
     def rename_entry(self, entry_id, new_name):
+        """Preimenuje zapis po ID-ju."""
         for e in self.entries:
-            if e.get("id") == entry_id:
+            if e["id"] == entry_id:
                 e["name"] = new_name
-                break
-        self._save()
+                self.save()
+                return True
+        return False
 
     def get_entry(self, entry_id):
+        """Vraća jedan zapis po ID-ju."""
         for e in self.entries:
-            if e.get("id") == entry_id:
+            if e["id"] == entry_id:
                 return e
         return None
 
     def get_all_entries(self):
-        # Vrati sortirano po id (rednom broju)
-        return sorted(self.entries, key=lambda e: e.get("id", 0))
+        """Vraća sve zapise."""
+        return self.entries
