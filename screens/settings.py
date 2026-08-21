@@ -8,14 +8,6 @@ Trenutno podržano:
   - Transpozicija nota (polustepeni)
   - Izbor ključa notnog zapisa (violinski / bas / oba)
 Sve izmene se odmah čuvaju u globalnom `settings` objektu iz config.py.
-
-FIX: Section boxes and description labels used to have hard-coded
-fixed heights (e.g. height=dp(120)), which overflowed whenever a
-description wrapped to more lines than expected, causing text to
-overlap the next section. Every label that can wrap now binds its
-height to its own texture_size, and section boxes size themselves via
-adaptive_height, so nothing can ever overlap regardless of text length
-or screen width.
 """
 
 from kivy.metrics import dp
@@ -30,21 +22,13 @@ from kivymd.uix.button import MDRaisedButton, MDFlatButton
 from config import settings, COLORS, hex_to_rgba
 
 
-def _wrapping_label(text, **kwargs):
-    """An MDLabel whose height always matches its (possibly multi-line,
-    wrapped) text -- never a fixed guess that text can overflow."""
-    lbl = MDLabel(text=text, size_hint_y=None, **kwargs)
-    lbl.bind(width=lambda inst, w: setattr(inst, "text_size", (w, None)))
-    lbl.bind(texture_size=lambda inst, ts: setattr(inst, "height", ts[1]))
-    return lbl
-
-
 class SettingsScreen(MDScreen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.build_ui()
 
     def build_ui(self):
+        # Glavni vertikalni layout
         root = MDBoxLayout(orientation="vertical")
 
         # Top bar
@@ -56,7 +40,7 @@ class SettingsScreen(MDScreen):
         )
 
         back_btn = MDLabel(
-            text="< Nazad",
+            text="← Nazad",
             font_size=16,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 0.9),
@@ -88,7 +72,6 @@ class SettingsScreen(MDScreen):
             orientation="vertical",
             padding=[dp(16), dp(8)],
             spacing=dp(20),
-            size_hint_y=None,
             adaptive_height=True,
         )
 
@@ -116,12 +99,8 @@ class SettingsScreen(MDScreen):
         self.sens_slider.bind(on_value=self._on_sensitivity_change)
         sens_box.add_widget(self.sens_slider)
 
-        sens_desc = _wrapping_label(
-            "Veća vrednost = strožija detekcija (manje lažnih nota, ali "
-            "može propustiti tihe tonove)",
-            font_style="Body2",
-            theme_text_color="Custom",
-            text_color=hex_to_rgba(COLORS["text_dim"], 0.8),
+        sens_desc = self._make_description_label(
+            "Veća vrednost = strožija detekcija (manje lažnih nota, ali može propustiti tihe tonove)"
         )
         sens_box.add_widget(sens_desc)
         content.add_widget(sens_box)
@@ -156,11 +135,8 @@ class SettingsScreen(MDScreen):
 
         trans_box.add_widget(trans_controls)
 
-        trans_desc = _wrapping_label(
-            "Pomera sve prepoznate note za odabrani broj polustepena",
-            font_style="Body2",
-            theme_text_color="Custom",
-            text_color=hex_to_rgba(COLORS["text_dim"], 0.8),
+        trans_desc = self._make_description_label(
+            "Pomera sve prepoznate note za odabrani broj polustepena"
         )
         trans_box.add_widget(trans_desc)
         content.add_widget(trans_box)
@@ -188,11 +164,8 @@ class SettingsScreen(MDScreen):
 
         clef_box.add_widget(clef_buttons)
 
-        clef_desc = _wrapping_label(
-            "Utiče na izgled notnog zapisa (PDF i ekran)",
-            font_style="Body2",
-            theme_text_color="Custom",
-            text_color=hex_to_rgba(COLORS["text_dim"], 0.8),
+        clef_desc = self._make_description_label(
+            "Utiče na izgled notnog zapisa (PDF i ekran)"
         )
         clef_box.add_widget(clef_desc)
         content.add_widget(clef_box)
@@ -211,29 +184,46 @@ class SettingsScreen(MDScreen):
 
         self.add_widget(root)
 
+        # Ažuriraj izgled dugmadi za trenutni ključ
         self._update_clef_buttons()
 
     def _build_section(self, title):
-        """Pravi BoxLayout sa naslovom i sadržajem. Visina se sama
-        računa iz sadržaja (adaptive_height) -- nikad fiksna, da se
-        ne bi nikad preklapala sa sledećom sekcijom."""
+        """Pravi BoxLayout sa naslovom i sadržajem."""
         box = MDBoxLayout(
             orientation="vertical",
             spacing=dp(8),
-            size_hint_y=None,
-            adaptive_height=True,
+            adaptive_height=True,  # visina se prilagođava sadržaju
         )
         title_label = MDLabel(
             text=title,
-            font_style="H6",
+            font_style="Subtitle1",  # smanjeno sa H6
             bold=True,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 1),
             size_hint_y=None,
-            height=dp(30),
+            halign="left",
+        )
+        # Dinamička visina naslova (prelamanje na uži ekran)
+        title_label.bind(
+            texture_size=lambda inst, val: setattr(inst, "height", val[1] + dp(4))
         )
         box.add_widget(title_label)
         return box
+
+    def _make_description_label(self, text):
+        """Pravi opisni tekst sa Caption stilom i dinamičkom visinom."""
+        label = MDLabel(
+            text=text,
+            font_style="Caption",  # smanjeno sa Body2
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["text_dim"], 0.8),
+            size_hint_y=None,
+            halign="left",
+        )
+        label.bind(
+            texture_size=lambda inst, val: setattr(inst, "height", val[1] + dp(4))
+        )
+        return label
 
     def _on_back_touch(self, instance, touch):
         if instance.collide_point(*touch.pos):
