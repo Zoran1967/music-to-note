@@ -2,181 +2,35 @@
 """
 screens/sheet_music.py
 
-FAZA 4: Prikaz notnog zapisa direktno u aplikaciji.
+FAZA 4: Upravljanje sačuvanim notnim zapisima.
+Svaki zapis ima redni broj, naziv (koji se može menjati), dugme za
+brisanje i dugme za izvoz (PDF i MIDI).
 
-Radi sa listom nota koju generiše transcription/pitch_detection.py
-(NoteDetector.notes). Crtanje se obavlja na Kivy Canvas-u -- nema
-eksternih biblioteka, ista strategija kao i ostatak projekta.
-
-Note se crtaju na 5 linija (violinski ključ). Trajanje nota je
-proporcionalno njihovom trajanju u sekundama -- duža nota = više
-horizontalnog prostora. Ako ima previše nota, prelazi se u novi red
-(kao u PDF-u). Vertikalni scroll se koristi za pregled svih redova.
+Lista se čuva u `app.sheet_storage` (JSON fajl u privatnom direktorijumu).
 """
 
-from kivy.uix.scrollview import ScrollView
-from kivy.uix.widget import Widget
-from kivy.graphics import Color, Line, Ellipse, Rectangle
 from kivy.metrics import dp
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.scrollview import ScrollView
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
-from kivy.properties import ListProperty
+from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.textfield import MDTextField
 
 from config import COLORS, hex_to_rgba
 
 
-NOTE_LETTERS = ["C", "D", "E", "F", "G", "A", "B"]
-STAFF_LINE_GAP = dp(14)  # razmak između linija
-STAFF_TOP_MARGIN = dp(60)
-STAFF_BOTTOM_MARGIN = dp(80)
-STAFF_LINES = 5
-NOTE_SPACING_BASE = dp(28)  # minimalni horizontalni razmak između nota
-NOTES_PER_ROW = 12  # koliko nota u jednom redu (kao u PDF-u)
-ROW_PITCH = STAFF_LINE_GAP * 8  # vertikalni razmak između redova
-
-
-class StaffCanvas(Widget):
-    """Widget koji crta notni zapis na Canvas-u."""
-
-    notes = ListProperty([])  # lista {"note": "A4", "start": 0.0, "end": 1.0}
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.bind(notes=self._redraw, size=self._redraw)
-
-    def _redraw(self, *args):
-        self.canvas.clear()
-        self.clear_widgets()
-        if not self.notes:
-            return
-
-        with self.canvas:
-            self._draw_notes()
-
-    def _note_to_step(self, note_name):
-        """'A4' -> step broj (0 = E4, donja linija)."""
-        letter = note_name[0]
-        rest = note_name[1:]
-        accidental = ""
-        if rest and rest[0] in "#b":
-            accidental = rest[0]
-            rest = rest[1:]
-        try:
-            octave = int(rest)
-        except (ValueError, IndexError):
-            octave = 4
-
-        letter_index = NOTE_LETTERS.index(letter)
-        ref_index = NOTE_LETTERS.index("E")
-        step = (octave - 4) * 7 + (letter_index - ref_index)
-        return step, accidental
-
-    def _draw_notes(self):
-        if not self.notes:
-            return
-
-        # Normalizuj trajanja za prikaz
-        durations = [max(0.1, n["end"] - n["start"]) for n in self.notes]
-        max_dur = max(durations) if durations else 1.0
-
-        y_base_first_row = self.height - STAFF_TOP_MARGIN
-        step_height = STAFF_LINE_GAP / 2.0
-
-        row = 0
-        col = 0
-
-        for n in self.notes:
-            # Prelazak u novi red
-            if col >= NOTES_PER_ROW:
-                col = 0
-                row += 1
-
-            # Y osnova za trenutni red
-            y_base = y_base_first_row - row * ROW_PITCH
-
-            # Crtaj notne linije za ovaj red (ako je prvi put u redu)
-            if col == 0:
-                self._draw_staff_lines(y_base)
-
-            duration = max(0.1, n["end"] - n["start"])
-            note_width = NOTE_SPACING_BASE + (duration / max_dur) * dp(20)
-
-            # X pozicija u redu
-            x = dp(40) + col * dp(50)
-
-            step, accidental = self._note_to_step(n["note"])
-            y = y_base - step * step_height
-
-            # Pomoćne linije za note van sistema
-            if step < 0:
-                Color(*hex_to_rgba(COLORS["text_dim"], 0.4))
-                s = -2
-                while s >= step:
-                    if s % 2 == 0:
-                        ly = y_base - s * step_height
-                        Line(points=[x - dp(6), ly, x + dp(6), ly], width=1)
-                    s -= 1
-            elif step > 8:
-                Color(*hex_to_rgba(COLORS["text_dim"], 0.4))
-                s = 10
-                while s <= step:
-                    if s % 2 == 0:
-                        ly = y_base - s * step_height
-                        Line(points=[x - dp(6), ly, x + dp(6), ly], width=1)
-                    s += 1
-
-            # Crna boja za note
-            Color(0, 0, 0, 1)
-
-            # Nota (elipsa)
-            rx, ry = dp(5), dp(4)
-            Ellipse(pos=(x - rx, y - ry), size=(rx * 2, ry * 2))
-
-            # Vrat note
-            if step >= 4:
-                Line(points=[x - rx, y, x - rx, y - dp(25)], width=1.5)
-            else:
-                Line(points=[x + rx, y, x + rx, y + dp(25)], width=1.5)
-
-            # Akcidental
-            if accidental:
-                Color(*hex_to_rgba(COLORS["gold"], 0.9))
-                Rectangle(pos=(x - dp(14), y - dp(2)), size=(dp(5), dp(5)))
-
-            # Ispis imena note
-            label = MDLabel(
-                text=n["note"],
-                font_size=10,
-                theme_text_color="Custom",
-                text_color=hex_to_rgba(COLORS["text_dim"], 0.8),
-                size_hint=(None, None),
-                size=(dp(40), dp(15)),
-                pos=(x - dp(20), y - dp(35)),
-                halign="center",
-            )
-            self.add_widget(label)
-
-            col += 1
-
-    def _draw_staff_lines(self, y_base):
-        """Crtaj 5 linija za jedan red."""
-        Color(*hex_to_rgba(COLORS["text_dim"], 0.6))
-        line_spacing = STAFF_LINE_GAP
-        for i in range(STAFF_LINES):
-            y = y_base - i * line_spacing
-            Line(points=[0, y, self.width, y], width=1.2)
-
-
 class SheetMusicScreen(MDScreen):
-    """Ekran za prikaz notnog zapisa."""
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._notes = []
+        self.dialog = None
+        self.build_ui()
 
-        # Glavni layout
-        layout = MDBoxLayout(orientation="vertical")
+    def build_ui(self):
+        # Glavni vertikalni layout
+        root = MDBoxLayout(orientation="vertical")
 
         # Top bar
         top_bar = MDBoxLayout(
@@ -199,7 +53,7 @@ class SheetMusicScreen(MDScreen):
         top_bar.add_widget(back_btn)
 
         title = MDLabel(
-            text="Notni zapis",
+            text="Moji notni zapisi",
             font_style="H6",
             bold=True,
             theme_text_color="Custom",
@@ -211,52 +65,238 @@ class SheetMusicScreen(MDScreen):
         spacer = MDLabel(size_hint_x=None, width=dp(80))
         top_bar.add_widget(spacer)
 
-        layout.add_widget(top_bar)
+        root.add_widget(top_bar)
 
-        # ScrollView sa Canvas-om (vertikalni scroll)
-        scroll = ScrollView(do_scroll_x=False, do_scroll_y=True)
-        self.staff_canvas = StaffCanvas(
-            size_hint=(1, None),
-            height=dp(500),  # biće povećano ako ima više redova
+        # Skrolabilni deo sa listom zapisa
+        scroll = ScrollView()
+        self.list_container = MDBoxLayout(
+            orientation="vertical",
+            padding=[dp(12), dp(8)],
+            spacing=dp(8),
+            adaptive_height=True,
         )
-        scroll.add_widget(self.staff_canvas)
-        layout.add_widget(scroll)
+        scroll.add_widget(self.list_container)
+        root.add_widget(scroll)
 
-        # Status label
-        self.status_label = MDLabel(
-            text="Nema prepoznatih nota",
-            halign="center",
-            theme_text_color="Custom",
-            text_color=hex_to_rgba(COLORS["text_dim"], 0.8),
+        self.add_widget(root)
+
+    def on_pre_enter(self, *args):
+        self.refresh_list()
+
+    def refresh_list(self):
+        """Ponovo iscrtaj listu iz app.sheet_storage."""
+        self.list_container.clear_widgets()
+
+        app = self._get_app()
+        if not hasattr(app, "sheet_storage"):
+            self.list_container.add_widget(
+                MDLabel(
+                    text="Skladište nije dostupno",
+                    font_style="Body2",
+                    theme_text_color="Custom",
+                    text_color=hex_to_rgba(COLORS["text_dim"], 0.8),
+                    size_hint_y=None,
+                    height=dp(40),
+                )
+            )
+            return
+
+        entries = app.sheet_storage.get_all_entries()
+        if not entries:
+            self.list_container.add_widget(
+                MDLabel(
+                    text="Nema sačuvanih notnih zapisa.\nAnalizirajte audio fajl da biste dodali novi.",
+                    font_style="Body2",
+                    halign="center",
+                    theme_text_color="Custom",
+                    text_color=hex_to_rgba(COLORS["text_dim"], 0.8),
+                    size_hint_y=None,
+                    height=dp(80),
+                )
+            )
+            return
+
+        for entry in entries:
+            self._add_entry_row(entry)
+
+    def _add_entry_row(self, entry):
+        """Pravi red za jedan zapis."""
+        row = MDBoxLayout(
+            orientation="horizontal",
+            spacing=dp(6),
             size_hint_y=None,
-            height=dp(30),
+            height=dp(52),
         )
-        layout.add_widget(self.status_label)
 
-        self.add_widget(layout)
+        # Naziv zapisa (klik za preimenovanje)
+        name_label = MDLabel(
+            text=entry["name"],
+            font_style="Subtitle1",
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["white"], 1),
+            size_hint_x=0.5,  # zauzima prostor
+            halign="left",
+            valign="center",
+        )
+        name_label.bind(on_touch_down=lambda inst, touch, eid=entry["id"]: self._on_name_click(inst, touch, eid) if inst.collide_point(*touch.pos) else False)
+        row.add_widget(name_label)
+
+        # Dugme za brisanje
+        delete_btn = MDIconButton(
+            icon="trash-can-outline",
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["danger"], 1),
+            size_hint_x=None,
+            width=dp(36),
+        )
+        delete_btn.bind(on_release=lambda inst, eid=entry["id"]: self._delete_entry(eid))
+        row.add_widget(delete_btn)
+
+        # Dugme za izvoz PDF
+        export_pdf_btn = MDIconButton(
+            icon="file-pdf-box",
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["cyan"], 1),
+            size_hint_x=None,
+            width=dp(36),
+        )
+        export_pdf_btn.bind(on_release=lambda inst, eid=entry["id"]: self._export_entry_pdf(eid))
+        row.add_widget(export_pdf_btn)
+
+        # Dugme za izvoz MIDI
+        export_midi_btn = MDIconButton(
+            icon="music-note",
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["gold"], 1),
+            size_hint_x=None,
+            width=dp(36),
+        )
+        export_midi_btn.bind(on_release=lambda inst, eid=entry["id"]: self._export_entry_midi(eid))
+        row.add_widget(export_midi_btn)
+
+        self.list_container.add_widget(row)
+
+    def _get_app(self):
+        from kivy.app import App
+        return App.get_running_app()
 
     def _on_back_touch(self, instance, touch):
         if instance.collide_point(*touch.pos):
-            from kivy.app import App
-            App.get_running_app().go_back()
+            self._get_app().go_back()
             return True
         return False
 
-    def set_notes(self, notes):
-        """Postavi note za prikaz."""
-        self._notes = notes if notes else []
-        self.staff_canvas.notes = self._notes
+    def _on_name_click(self, instance, touch, entry_id):
+        """Otvara dijalog za preimenovanje."""
+        entry = self._get_app().sheet_storage.get_entry(entry_id)
+        if not entry:
+            return
+        self._show_rename_dialog(entry_id, entry["name"])
 
-        if not self._notes:
-            self.status_label.text = "Nema prepoznatih nota"
-            self.staff_canvas.height = dp(500)
-        else:
-            self.status_label.text = "{} nota".format(len(self._notes))
-            # Izračunaj potrebnu visinu za sve redove
-            rows = (len(self._notes) + NOTES_PER_ROW - 1) // NOTES_PER_ROW
-            needed_height = STAFF_TOP_MARGIN + rows * ROW_PITCH + STAFF_BOTTOM_MARGIN
-            self.staff_canvas.height = max(dp(500), needed_height)
+    def _show_rename_dialog(self, entry_id, current_name):
+        text_field = MDTextField(
+            text=current_name,
+            hint_text="Naziv zapisa",
+            size_hint_y=None,
+            height=dp(48),
+        )
+        dialog = MDDialog(
+            title="Preimenuj zapis",
+            type="custom",
+            content_cls=MDBoxLayout(
+                orientation="vertical",
+                spacing=dp(8),
+                padding=[dp(16), dp(0), dp(16), dp(8)],
+                adaptive_height=True,
+            ),
+            buttons=[
+                MDFlatButton(
+                    text="Otkaži",
+                    on_release=lambda inst: dialog.dismiss()
+                ),
+                MDRaisedButton(
+                    text="Sačuvaj",
+                    on_release=lambda inst: self._rename_entry(entry_id, text_field.text, dialog)
+                ),
+            ],
+        )
+        # Dodaj text_field u content_cls
+        dialog.content_cls.add_widget(text_field)
+        dialog.open()
+        self.dialog = dialog
 
-    def clear_notes(self):
-        """Obriši prikaz."""
-        self.set_notes([])
+    def _rename_entry(self, entry_id, new_name, dialog):
+        new_name = new_name.strip()
+        if new_name:
+            self._get_app().sheet_storage.rename_entry(entry_id, new_name)
+            dialog.dismiss()
+            self.refresh_list()
+
+    def _delete_entry(self, entry_id):
+        """Obriši zapis i osveži listu."""
+        self._get_app().sheet_storage.delete_entry(entry_id)
+        self.refresh_list()
+
+    def _export_entry_pdf(self, entry_id):
+        """Eksportuj PDF za dati zapis."""
+        entry = self._get_app().sheet_storage.get_entry(entry_id)
+        if not entry:
+            return
+        try:
+            from transcription.notation_pdf import export_notes_to_pdf
+            from android_storage import save_to_downloads
+            from kivy.clock import Clock
+            import os
+
+            base = entry["name"].replace(" ", "_")
+            display_name = "{}.pdf".format(base)
+
+            tmp_dir = self._get_app_dir("tmp_exports")
+            os.makedirs(tmp_dir, exist_ok=True)
+            tmp_path = os.path.join(tmp_dir, display_name)
+
+            export_notes_to_pdf(
+                entry["notes"],
+                tmp_path,
+                title=entry["name"],
+                clef=None  # koristi globalno podešavanje
+            )
+
+            def _on_done(success, message):
+                print("PDF export:", message)
+
+            save_to_downloads(tmp_path, display_name, "application/pdf", _on_done)
+        except Exception as e:
+            print("Greška pri PDF exportu:", e)
+
+    def _export_entry_midi(self, entry_id):
+        """Eksportuj MIDI za dati zapis."""
+        entry = self._get_app().sheet_storage.get_entry(entry_id)
+        if not entry:
+            return
+        try:
+            from transcription.midi_export import export_notes_to_midi
+            from android_storage import save_to_downloads
+            import os
+
+            base = entry["name"].replace(" ", "_")
+            display_name = "{}.mid".format(base)
+
+            tmp_dir = self._get_app_dir("tmp_exports")
+            os.makedirs(tmp_dir, exist_ok=True)
+            tmp_path = os.path.join(tmp_dir, display_name)
+
+            export_notes_to_midi(entry["notes"], tmp_path)
+
+            def _on_done(success, message):
+                print("MIDI export:", message)
+
+            save_to_downloads(tmp_path, display_name, "audio/midi", _on_done)
+        except Exception as e:
+            print("Greška pri MIDI exportu:", e)
+
+    def _get_app_dir(self, subfolder):
+        from jnius import autoclass
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        context = PythonActivity.mActivity
+        return os.path.join(context.getFilesDir().getAbsolutePath(), subfolder)
