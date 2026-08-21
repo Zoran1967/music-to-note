@@ -2,165 +2,84 @@
 """
 main.py
 
-Music -> Note
---------------
-A modern Android app that listens to music (microphone or audio file)
-and turns it into sheet music / MIDI.
-
-FAZA 1: visual environment, theme, navigation -- DONE.
-FAZA 2: real microphone recording + real audio file import -- DONE.
-FAZA 3: pure-Python pitch/note detection -- ACTIVE.
-
-DIAGNOSTIC MODE:
-If anything fails while building the real UI, this file catches the
-error and shows the full Python traceback directly on the phone screen
-instead of silently crashing to a black screen. This stays in the code
-for the entire life of the project, per project strategy.
-
-Run with (desktop, for design preview):
-    python3 main.py
+Glavna ulazna tačka aplikacije Music to Note.
+Inicijalizuje sve module, storage i pokreće KivyMD aplikaciju.
 """
 
 import os
-import traceback
 
 from kivy.core.window import Window
-from kivy.core.text import LabelBase
 from kivy.lang import Builder
-from kivy.utils import platform
-
-if platform not in ("android", "ios"):
-    if os.environ.get("MTN_DESKTOP_PREVIEW", "1") == "1":
-        Window.size = (390, 780)
-
-
-def _build_real_app(app):
-    """Everything that could realistically break lives in here, wrapped
-    by build() below so a failure shows on-screen instead of crashing."""
-    import config as cfg
-    from kivymd.uix.screenmanager import MDScreenManager
-    from kivy.uix.screenmanager import SlideTransition
-
-    from screens.home import HomeScreen
-    from screens.recorder import RecorderScreen
-    from screens.audio_import import AudioImportScreen
-    from screens.sheet_music import SheetMusicScreen
-    from screens.midi import MidiScreen
-    from screens.recordings import RecordingsScreen
-    from screens.settings import SettingsScreen
-
-    # Inicijalizuj globalno skladište za notne zapise
-    from storage import SheetStorage
-    app.sheet_storage = SheetStorage()
-
-    app.cfg = cfg
-    app.title = cfg.APP_NAME
-
-    LabelBase.register(
-        name="Poppins",
-        fn_regular=cfg.FONT_REGULAR,
-        fn_bold=cfg.FONT_BOLD,
-    )
-    try:
-        for style_name in ("H4", "H5", "H6", "Subtitle1", "Body2", "Caption"):
-            app.theme_cls.font_styles[style_name][0] = "Poppins"
-    except (KeyError, TypeError, IndexError):
-        pass
-
-    app.theme_cls.theme_style = "Dark"
-    app.theme_cls.primary_palette = "DeepPurple"
-    app.theme_cls.accent_palette = "Cyan"
-
-    Builder.load_file(os.path.join(cfg.KV_DIR, "theme.kv"))
-    Builder.load_file(os.path.join(cfg.KV_DIR, "placeholder.kv"))
-    Builder.load_file(os.path.join(cfg.KV_DIR, "home.kv"))
-    Builder.load_file(os.path.join(cfg.KV_DIR, "recorder.kv"))
-    Builder.load_file(os.path.join(cfg.KV_DIR, "audio_import.kv"))
-    Builder.load_file(os.path.join(cfg.KV_DIR, "recordings.kv"))
-
-    sm = MDScreenManager()
-    sm.transition = SlideTransition(duration=0.22)
-
-    sm.add_widget(HomeScreen(name=cfg.Routes.HOME))
-    sm.add_widget(RecorderScreen(name=cfg.Routes.RECORDER))
-    sm.add_widget(AudioImportScreen(name=cfg.Routes.AUDIO_IMPORT))
-    sm.add_widget(SheetMusicScreen(name=cfg.Routes.SHEET_MUSIC))
-    sm.add_widget(MidiScreen(name=cfg.Routes.MIDI))
-    sm.add_widget(RecordingsScreen(name=cfg.Routes.RECORDINGS))
-    sm.add_widget(SettingsScreen(name=cfg.Routes.SETTINGS))
-
-    sm.current = cfg.Routes.HOME
-    app.sm = sm
-    return sm
-
-
-def _build_error_screen(error_text):
-    """Plain-Kivy (no KivyMD dependency) scrollable error screen so it
-    works even if KivyMD itself is what failed to load."""
-    from kivy.uix.scrollview import ScrollView
-    from kivy.uix.label import Label
-    from kivy.uix.boxlayout import BoxLayout
-    from kivy.core.window import Window as _Win
-
-    _Win.clearcolor = (0.05, 0.05, 0.08, 1)
-
-    root = BoxLayout(orientation="vertical", padding=20, spacing=10)
-    title = Label(
-        text="[b]Music -> Note -- GRESKA PRI POKRETANJU[/b]\n"
-             "(uslikaj ovaj ekran i posalji)",
-        markup=True,
-        size_hint_y=None,
-        height=90,
-        color=(1, 0.4, 0.4, 1),
-        halign="center",
-    )
-    root.add_widget(title)
-
-    scroll = ScrollView()
-    label = Label(
-        text=error_text,
-        size_hint_y=None,
-        text_size=(_Win.width - 40, None),
-        color=(0.9, 0.9, 0.95, 1),
-        halign="left",
-        valign="top",
-        font_size=13,
-    )
-    label.bind(texture_size=lambda inst, val: setattr(label, "height", val[1]))
-    scroll.add_widget(label)
-    root.add_widget(scroll)
-    return root
-
-
+from kivy.uix.screenmanager import ScreenManager
 from kivymd.app import MDApp
 
+# Import postojećih modula
+from config import COLORS, hex_to_rgba
+from storage import SheetStorage
+
+# Učitavanje KV fajlova (ako postoje u folderu kv)
+def load_kv_files():
+    kv_dir = "kv"
+    if os.path.exists(kv_dir):
+        for filename in os.listdir(kv_dir):
+            if filename.endswith(".kv"):
+                Builder.load_file(os.path.join(kv_dir, filename))
 
 class MusicToNoteApp(MDApp):
-    """Root application class for Music -> Note."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.sheet_storage = None
+        self.screen_manager = None
 
     def build(self):
-        try:
-            return _build_real_app(self)
-        except Exception:
-            err = traceback.format_exc()
-            print("=" * 60)
-            print("MUSIC TO NOTE STARTUP ERROR:")
-            print(err)
-            print("=" * 60)
-            return _build_error_screen(err)
+        # Podešavanje teme (boje, font)
+        self.theme_cls.primary_palette = "DeepPurple"
+        self.theme_cls.theme_style = "Dark"
 
-    def go_to(self, route_name: str):
-        if not hasattr(self, "sm") or self.sm.current == route_name:
-            return
-        self.sm.transition.direction = "left"
-        self.sm.current = route_name
+        # Učitaj sve KV fajlove (osim onih koje smo definisali u Pythonu)
+        try:
+            load_kv_files()
+        except Exception as e:
+            print(f"Greška pri učitavanju KV fajlova: {e}")
+
+        # Inicijalizuj SheetStorage u privatnom Android folderu
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            context = PythonActivity.mActivity
+            app_dir = context.getFilesDir().getAbsolutePath()
+        except Exception:
+            # Za desktop testiranje (ako nema Androida)
+            app_dir = os.path.dirname(os.path.abspath(__file__))
+
+        self.sheet_storage = SheetStorage(app_dir)
+
+        # Kreiraj ScreenManager i dodaj sve postojeće ekrane
+        self.screen_manager = ScreenManager()
+
+        # Import ekrana (screens folder)
+        from screens.home import HomeScreen
+        from screens.recorder import RecorderScreen
+        from screens.recordings import RecordingsScreen
+        from screens.sheet_music import SheetMusicScreen
+        from screens.settings import SettingsScreen
+
+        self.screen_manager.add_widget(HomeScreen(name="home"))
+        self.screen_manager.add_widget(RecorderScreen(name="recorder"))
+        self.screen_manager.add_widget(RecordingsScreen(name="recordings"))
+        self.screen_manager.add_widget(SheetMusicScreen(name="sheet_music"))
+        self.screen_manager.add_widget(SettingsScreen(name="settings"))
+
+        return self.screen_manager
 
     def go_back(self):
-        if not hasattr(self, "sm"):
-            return
-        self.sm.transition.direction = "right"
-        self.sm.current = self.cfg.Routes.HOME
-
+        """Vraća na prethodni ekran."""
+        if self.screen_manager.current != "home":
+            self.screen_manager.current = "home"
+            return True
+        return False
 
 if __name__ == "__main__":
+    # Podesi veličinu prozora za desktop testiranje (opciono)
+    Window.size = (360, 640)
     MusicToNoteApp().run()
