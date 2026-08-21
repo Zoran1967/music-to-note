@@ -29,6 +29,8 @@ routing through Android's MediaCodec API -- left for a later phase.
 import math
 import wave
 
+from config import settings  # dodato za dinamičku osetljivost
+
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 # Frame/hop sizes tuned for SAMPLE_RATE=16000 audio (see recorder.py).
@@ -38,8 +40,7 @@ FMIN = 70.0    # ~D2, comfortably below a low male voice / bass instrument
 FMAX = 1050.0  # ~C6, comfortably above a soprano voice / high melody line
 MIN_NOTE_DURATION = 0.08  # seconds -- discard shorter, likely spurious blips
 SILENCE_ENERGY_RATIO = 0.0025  # relative energy threshold to call a frame "silent"
-MAX_ANALYSIS_SECONDS = 120  # keep pure-Python analysis's total work bounded
-MIN_CONFIDENCE = 0.35  # normalized autocorrelation threshold to accept a pitch
+MAX_ANALYSIS_SECONDS = 0  # 0 = bez ograničenja (analiziraj ceo fajl)
 
 
 def freq_to_note(freq):
@@ -51,6 +52,37 @@ def freq_to_note(freq):
     note_name = NOTE_NAMES[midi_round % 12]
     octave = midi_round // 12 - 1
     return "{}{}".format(note_name, octave)
+
+
+def transpose_note_name(note_name, semitones):
+    """Transponuje naziv note za zadati broj polustepena."""
+    if not note_name or semitones == 0:
+        return note_name
+
+    letter = note_name[0]
+    rest = note_name[1:]
+    accidental = ""
+    if rest and rest[0] in "#b":
+        accidental = rest[0]
+        rest = rest[1:]
+    try:
+        octave = int(rest) if rest else 4
+    except ValueError:
+        octave = 4
+
+    # Pretvori u MIDI broj
+    midi = (octave + 1) * 12 + NOTE_NAMES.index(letter)
+    if accidental == "#":
+        midi += 1
+    elif accidental == "b":
+        midi -= 1
+
+    midi += semitones
+    midi = max(0, min(127, midi))
+
+    note = NOTE_NAMES[midi % 12]
+    octave = midi // 12 - 1
+    return "{}{}".format(note, octave)
 
 
 def _read_wav_samples(path):
@@ -114,7 +146,8 @@ def _autocorrelation_pitch(frame, sample_rate):
         return None
 
     confidence = best_corr / (energy + 1e-9)
-    if confidence < MIN_CONFIDENCE:
+    # Koristimo dinamičku osetljivost iz podešavanja
+    if confidence < settings.sensitivity:
         return None
 
     return sample_rate / best_lag
@@ -143,7 +176,7 @@ class NoteDetector:
     def __init__(self, path):
         samples, sample_rate = _read_wav_samples(path)
 
-        max_samples = int(MAX_ANALYSIS_SECONDS * sample_rate)
+        max_samples = int(MAX_ANALYSIS_SECONDS * sample_rate) if MAX_ANALYSIS_SECONDS > 0 else len(samples)
         if len(samples) > max_samples:
             samples = samples[:max_samples]
 
