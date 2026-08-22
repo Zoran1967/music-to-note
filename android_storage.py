@@ -2,17 +2,17 @@
 """
 android_storage.py
 Čuvanje fajlova u Android Downloads folder.
-Ispravljeno: koristi direktna imena kolona (stringove) umesto
-MediaStore.Downloads.* konstanti, jer pyjnius ume da ne pronađe
-polja nasleđena iz interfejsa (MediaColumns), što je izazivalo
-tihu grešku pri pravljenju fajla.
+
+Ispravljeno (2. put): pyjnius nije mogao da odluči koju verziju
+ContentValues.put() metode da pozove za broj 0/1 (IS_PENDING), jer
+Android ima više verzija te metode (za Integer, Float, itd), a običan
+Python broj je bio dvosmislen. Sada eksplicitno pravimo pravi Java
+Integer objekat, pa više nema zabune.
 """
 
 import os
 from kivy.utils import platform
 
-# Ovo su fiksna, standardna imena kolona u Android MediaStore bazi.
-# Nikad se ne menjaju, zato je bezbedno da ih upišemo direktno kao tekst.
 COL_DISPLAY_NAME = "_display_name"
 COL_MIME_TYPE = "mime_type"
 COL_RELATIVE_PATH = "relative_path"
@@ -31,12 +31,14 @@ def save_to_downloads(temp_path, display_name, mime_type, callback=None):
             ContentValues = autoclass("android.content.ContentValues")
             MediaStoreDownloads = autoclass("android.provider.MediaStore$Downloads")
             FileInputStream = autoclass("java.io.FileInputStream")
+            Integer = autoclass("java.lang.Integer")
 
             values = ContentValues()
             values.put(COL_DISPLAY_NAME, display_name)
             values.put(COL_MIME_TYPE, mime_type)
             values.put(COL_RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-            values.put(COL_IS_PENDING, 1)
+            # ISPRAVKA: eksplicitan Java Integer, ne "goli" Python broj
+            values.put(COL_IS_PENDING, Integer(1))
 
             uri = context.getContentResolver().insert(
                 MediaStoreDownloads.EXTERNAL_CONTENT_URI, values
@@ -58,7 +60,8 @@ def save_to_downloads(temp_path, display_name, mime_type, callback=None):
                 input_stream.close()
 
                 update_values = ContentValues()
-                update_values.put(COL_IS_PENDING, 0)
+                # ISPRAVKA: isto ovde, eksplicitan Integer
+                update_values.put(COL_IS_PENDING, Integer(0))
                 context.getContentResolver().update(uri, update_values, None, None)
 
                 if callback:
