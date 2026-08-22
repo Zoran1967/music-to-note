@@ -125,7 +125,7 @@ class SheetMusicScreen(MDScreen):
         # Naziv zapisa (klik otvara pregled nota)
         name_btn = MDFlatButton(
             text=entry["name"],
-            font_size=14,
+            font_size="12sp",
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 1),
             size_hint_x=0.5,
