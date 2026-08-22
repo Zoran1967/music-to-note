@@ -8,18 +8,83 @@ Trenutno podržano:
   - Transpozicija nota (polustepeni)
   - Izbor ključa notnog zapisa (violinski / bas / oba)
 Sve izmene se odmah čuvaju u globalnom `settings` objektu iz config.py.
+
+FAZA 6: Redizajniran izgled (kartice sa zaobljenim ivicama i tankim
+"glow" okvirom u violet boji), usklađen sa bojama koje već koristi
+ostatak aplikacije (config.COLORS). Funkcionalnost je nepromenjena.
 """
 
 from kivy.metrics import dp
-from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.scrollview import ScrollView
+from kivy.graphics import Color, RoundedRectangle, Line
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
 from kivymd.uix.slider import MDSlider
-from kivymd.uix.button import MDRaisedButton, MDFlatButton
 
 from config import settings, COLORS, hex_to_rgba
+
+
+class _CardBox(MDBoxLayout):
+    """Kartica sa zaobljenim ivicama i tankim violet okvirom (bez klika)."""
+
+    def __init__(self, radius=18, bg_alpha=0.55, border_alpha=0.45, **kwargs):
+        super().__init__(**kwargs)
+        self._radius = dp(radius)
+        with self.canvas.before:
+            self._bg_color = Color(*hex_to_rgba(COLORS["card_glass"], bg_alpha))
+            self._bg_rect = RoundedRectangle(
+                pos=self.pos, size=self.size, radius=[self._radius]
+            )
+            self._border_color = Color(*hex_to_rgba(COLORS["violet"], border_alpha))
+            self._border_line = Line(
+                rounded_rectangle=(self.x, self.y, self.width, self.height, self._radius),
+                width=1.3,
+            )
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
+
+    def _update_canvas(self, *args):
+        self._bg_rect.pos = self.pos
+        self._bg_rect.size = self.size
+        self._border_line.rounded_rectangle = (
+            self.x, self.y, self.width, self.height, self._radius
+        )
+
+
+class _GlowButton(ButtonBehavior, MDBoxLayout):
+    """Klikabilna kartica sa zaobljenim ivicama i violet okvirom (dugme)."""
+
+    def __init__(self, radius=14, bg_alpha=0.55, border_alpha=0.55, **kwargs):
+        super().__init__(**kwargs)
+        self._radius = dp(radius)
+        self._bg_alpha = bg_alpha
+        self._border_alpha = border_alpha
+        with self.canvas.before:
+            self._bg_color = Color(*hex_to_rgba(COLORS["card_glass"], bg_alpha))
+            self._bg_rect = RoundedRectangle(
+                pos=self.pos, size=self.size, radius=[self._radius]
+            )
+            self._border_color = Color(*hex_to_rgba(COLORS["violet"], border_alpha))
+            self._border_line = Line(
+                rounded_rectangle=(self.x, self.y, self.width, self.height, self._radius),
+                width=1.4,
+            )
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
+
+    def _update_canvas(self, *args):
+        self._bg_rect.pos = self.pos
+        self._bg_rect.size = self.size
+        self._border_line.rounded_rectangle = (
+            self.x, self.y, self.width, self.height, self._radius
+        )
+
+    def set_selected(self, selected):
+        bg_hex = COLORS["violet_mid"] if selected else COLORS["card_glass"]
+        bg_alpha = 0.9 if selected else self._bg_alpha
+        border_alpha = 1.0 if selected else self._border_alpha
+        self._bg_color.rgba = hex_to_rgba(bg_hex, bg_alpha)
+        self._border_color.rgba = hex_to_rgba(COLORS["violet"], border_alpha)
 
 
 class SettingsScreen(MDScreen):
@@ -35,33 +100,35 @@ class SettingsScreen(MDScreen):
         top_bar = MDBoxLayout(
             orientation="horizontal",
             size_hint_y=None,
-            height=dp(50),
-            padding=[dp(8), dp(4)],
+            height=dp(56),
+            padding=[dp(16), dp(8)],
         )
 
         back_btn = MDLabel(
-            text="← Nazad",
-            font_size=16,
+            text="Nazad",
+            font_size="15sp",
             theme_text_color="Custom",
-            text_color=hex_to_rgba(COLORS["white"], 0.9),
+            text_color=hex_to_rgba(COLORS["text_dim"], 0.9),
             size_hint_x=None,
-            width=dp(80),
+            width=dp(70),
             halign="left",
+            valign="middle",
         )
         back_btn.bind(on_touch_down=self._on_back_touch)
         top_bar.add_widget(back_btn)
 
         title = MDLabel(
             text="Podešavanja",
-            font_style="H6",
+            font_size="26sp",
             bold=True,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 1),
             halign="center",
+            valign="middle",
         )
         top_bar.add_widget(title)
 
-        spacer = MDLabel(size_hint_x=None, width=dp(80))
+        spacer = MDLabel(size_hint_x=None, width=dp(70))
         top_bar.add_widget(spacer)
 
         root.add_widget(top_bar)
@@ -70,23 +137,33 @@ class SettingsScreen(MDScreen):
         scroll = ScrollView()
         content = MDBoxLayout(
             orientation="vertical",
-            padding=[dp(16), dp(8)],
-            spacing=dp(20),
+            padding=[dp(16), dp(4), dp(16), dp(16)],
+            spacing=dp(22),
             adaptive_height=True,
         )
 
         # --- 1. Osetljivost detekcije ---
-        sens_box = self._build_section("Osetljivost detekcije")
+        content.add_widget(self._make_section_title("Osetljivost detekcije"))
+
+        sens_card = _CardBox(
+            orientation="vertical",
+            spacing=dp(10),
+            padding=[dp(18), dp(18)],
+            adaptive_height=True,
+            radius=18,
+        )
+
         self.sens_value_label = MDLabel(
             text="{}".format(settings.sensitivity),
-            font_style="Subtitle1",
+            font_size="30sp",
+            bold=True,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["violet"], 1),
             size_hint_y=None,
-            height=dp(30),
+            height=dp(42),
             halign="center",
         )
-        sens_box.add_widget(self.sens_value_label)
+        sens_card.add_widget(self.sens_value_label)
 
         self.sens_slider = MDSlider(
             min=0.2,
@@ -94,88 +171,148 @@ class SettingsScreen(MDScreen):
             value=settings.sensitivity,
             step=0.01,
             size_hint_y=None,
-            height=dp(40),
+            height=dp(36),
         )
         self.sens_slider.bind(on_value=self._on_sensitivity_change)
-        sens_box.add_widget(self.sens_slider)
+        sens_card.add_widget(self.sens_slider)
 
-        sens_desc = self._make_description_label(
-            "Veća vrednost = strožija detekcija (manje lažnih nota, ali može propustiti tihe tonove)"
+        sens_card.add_widget(
+            self._make_description_label(
+                "Veća vrednost = strožija detekcija (manje lažnih nota, "
+                "ali može propustiti tihe tonove)"
+            )
         )
-        sens_box.add_widget(sens_desc)
-        content.add_widget(sens_box)
+        content.add_widget(sens_card)
 
         # --- 2. Transpozicija ---
-        trans_box = self._build_section("Transpozicija (polustepeni)")
-        trans_controls = MDBoxLayout(
-            orientation="horizontal",
+        content.add_widget(self._make_section_title("Transpozicija (polustepeni)"))
+
+        trans_card = _CardBox(
+            orientation="vertical",
             spacing=dp(10),
-            size_hint_y=None,
-            height=dp(40),
+            padding=[dp(18), dp(18)],
+            adaptive_height=True,
+            radius=18,
         )
 
-        minus_btn = MDRaisedButton(text="-", size_hint_x=None, width=dp(50))
+        trans_controls = MDBoxLayout(
+            orientation="horizontal",
+            spacing=dp(14),
+            size_hint_y=None,
+            height=dp(52),
+        )
+
+        minus_btn = _GlowButton(
+            radius=14,
+            size_hint_x=None,
+            width=dp(52),
+            padding=[0, 0],
+        )
+        minus_label = MDLabel(
+            text="\u2212",
+            font_size="22sp",
+            bold=True,
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["white"], 1),
+            halign="center",
+            valign="middle",
+        )
+        minus_btn.add_widget(minus_label)
         minus_btn.bind(on_release=lambda inst: self._change_transpose(-1))
         trans_controls.add_widget(minus_btn)
 
         self.trans_value_label = MDLabel(
             text="{}".format(settings.transpose),
-            font_style="H5",
+            font_size="30sp",
             bold=True,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["violet"], 1),
             halign="center",
+            valign="middle",
             size_hint_x=1,
         )
         trans_controls.add_widget(self.trans_value_label)
 
-        plus_btn = MDRaisedButton(text="+", size_hint_x=None, width=dp(50))
+        plus_btn = _GlowButton(
+            radius=14,
+            size_hint_x=None,
+            width=dp(52),
+            padding=[0, 0],
+        )
+        plus_label = MDLabel(
+            text="+",
+            font_size="22sp",
+            bold=True,
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["white"], 1),
+            halign="center",
+            valign="middle",
+        )
+        plus_btn.add_widget(plus_label)
         plus_btn.bind(on_release=lambda inst: self._change_transpose(1))
         trans_controls.add_widget(plus_btn)
 
-        trans_box.add_widget(trans_controls)
+        trans_card.add_widget(trans_controls)
 
-        trans_desc = self._make_description_label(
-            "Pomera sve prepoznate note za odabrani broj polustepena"
+        trans_card.add_widget(
+            self._make_description_label(
+                "Pomera sve prepoznate note za odabrani broj polustepena"
+            )
         )
-        trans_box.add_widget(trans_desc)
-        content.add_widget(trans_box)
+        content.add_widget(trans_card)
 
         # --- 3. Ključ notnog zapisa ---
-        clef_box = self._build_section("Ključ notnog zapisa")
+        content.add_widget(self._make_section_title("Ključ notnog zapisa"))
+
+        clef_card = _CardBox(
+            orientation="vertical",
+            spacing=dp(10),
+            padding=[dp(10), dp(10)],
+            adaptive_height=True,
+            radius=18,
+        )
+
         clef_buttons = MDBoxLayout(
             orientation="horizontal",
-            spacing=dp(10),
+            spacing=dp(8),
             size_hint_y=None,
-            height=dp(40),
+            height=dp(52),
         )
 
-        self.treble_btn = MDFlatButton(text="Violinski", size_hint_x=1)
-        self.treble_btn.bind(on_release=lambda inst: self._set_clef("treble"))
+        self.treble_btn = self._make_clef_button("Violinski", "treble")
         clef_buttons.add_widget(self.treble_btn)
 
-        self.bass_btn = MDFlatButton(text="Bas", size_hint_x=1)
-        self.bass_btn.bind(on_release=lambda inst: self._set_clef("bass"))
+        self.bass_btn = self._make_clef_button("Bas", "bass")
         clef_buttons.add_widget(self.bass_btn)
 
-        self.both_btn = MDFlatButton(text="Oba", size_hint_x=1)
-        self.both_btn.bind(on_release=lambda inst: self._set_clef("both"))
+        self.both_btn = self._make_clef_button("Oba", "both")
         clef_buttons.add_widget(self.both_btn)
 
-        clef_box.add_widget(clef_buttons)
+        clef_card.add_widget(clef_buttons)
 
-        clef_desc = self._make_description_label(
-            "Utiče na izgled notnog zapisa (PDF i ekran)"
+        clef_card.add_widget(
+            self._make_description_label("Utiče na izgled notnog zapisa (PDF i ekran)")
         )
-        clef_box.add_widget(clef_desc)
-        content.add_widget(clef_box)
+        content.add_widget(clef_card)
 
         # --- 4. Reset dugme ---
-        reset_btn = MDRaisedButton(
-            text="Resetuj podrazumevano",
+        reset_btn = _GlowButton(
+            radius=24,
+            bg_alpha=0.65,
+            border_alpha=0.7,
             size_hint_y=None,
-            height=dp(44),
+            height=dp(52),
         )
+        reset_label = MDLabel(
+            text="Resetuj podrazumevano",
+            font_size="16sp",
+            bold=True,
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["white"], 1),
+            halign="center",
+            valign="middle",
+        )
+        reset_btn.add_widget(reset_label)
         reset_btn.bind(on_release=self._reset_settings)
         content.add_widget(reset_btn)
 
@@ -187,34 +324,45 @@ class SettingsScreen(MDScreen):
         # Ažuriraj izgled dugmadi za trenutni ključ
         self._update_clef_buttons()
 
-    def _build_section(self, title):
-        """Pravi BoxLayout sa naslovom i sadržajem."""
-        box = MDBoxLayout(
-            orientation="vertical",
-            spacing=dp(8),
-            adaptive_height=True,  # visina se prilagođava sadržaju
+    def _make_clef_button(self, text, clef_id):
+        btn = _GlowButton(
+            radius=14,
+            size_hint_x=1,
+            padding=[dp(6), dp(6)],
         )
-        title_label = MDLabel(
+        label = MDLabel(
+            text=text,
+            font_size="14sp",
+            bold=True,
+            theme_text_color="Custom",
+            text_color=hex_to_rgba(COLORS["white"], 1),
+            halign="center",
+            valign="middle",
+        )
+        btn.add_widget(label)
+        btn.bind(on_release=lambda inst: self._set_clef(clef_id))
+        return btn
+
+    def _make_section_title(self, title):
+        label = MDLabel(
             text=title,
-            font_style="Subtitle1",  # smanjeno sa H6
+            font_size="18sp",
             bold=True,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 1),
             size_hint_y=None,
             halign="left",
         )
-        # Dinamička visina naslova (prelamanje na uži ekran)
-        title_label.bind(
+        label.bind(
             texture_size=lambda inst, val: setattr(inst, "height", val[1] + dp(4))
         )
-        box.add_widget(title_label)
-        return box
+        return label
 
     def _make_description_label(self, text):
         """Pravi opisni tekst sa Caption stilom i dinamičkom visinom."""
         label = MDLabel(
             text=text,
-            font_style="Caption",  # smanjeno sa Body2
+            font_style="Caption",
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["text_dim"], 0.8),
             size_hint_y=None,
@@ -248,9 +396,9 @@ class SettingsScreen(MDScreen):
     def _update_clef_buttons(self):
         """Vizuelno označi selektovani ključ."""
         clef = settings.clef
-        self.treble_btn.md_bg_color = hex_to_rgba(COLORS["violet"], 0.3) if clef == "treble" else (0, 0, 0, 0)
-        self.bass_btn.md_bg_color = hex_to_rgba(COLORS["violet"], 0.3) if clef == "bass" else (0, 0, 0, 0)
-        self.both_btn.md_bg_color = hex_to_rgba(COLORS["violet"], 0.3) if clef == "both" else (0, 0, 0, 0)
+        self.treble_btn.set_selected(clef == "treble")
+        self.bass_btn.set_selected(clef == "bass")
+        self.both_btn.set_selected(clef == "both")
 
     def _reset_settings(self, instance):
         settings.reset_to_defaults()
