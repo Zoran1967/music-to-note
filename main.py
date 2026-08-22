@@ -14,7 +14,7 @@ from kivymd.app import MDApp
 
 # Import konfiguracije i storage-a
 import config
-from storage import SheetStorage
+from storage import SheetStorage, MidiStorage
 
 
 def load_kv_files():
@@ -46,6 +46,7 @@ class MusicToNoteApp(MDApp):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.sheet_storage = None
+        self.midi_storage = None
         self.screen_manager = None
         # Povezujemo konfiguraciju sa aplikacijom (da app.cfg radi u KV fajlovima)
         self.cfg = config
@@ -69,6 +70,7 @@ class MusicToNoteApp(MDApp):
             app_dir = os.path.dirname(os.path.abspath(__file__))
 
         self.sheet_storage = SheetStorage(app_dir)
+        self.midi_storage = MidiStorage(app_dir)
 
         # 3. Kreiraj ScreenManager
         self.screen_manager = ScreenManager()
