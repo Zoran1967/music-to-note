@@ -15,7 +15,6 @@ from kivymd.uix.label import MDLabel
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.textfield import MDTextField
-from kivymd.uix.snackbar import Snackbar
 
 from config import COLORS, hex_to_rgba
 
@@ -123,6 +122,7 @@ class SheetMusicScreen(MDScreen):
             height=dp(52),
         )
 
+        # Naziv zapisa (klik otvara pregled nota)
         name_btn = MDFlatButton(
             text=entry["name"],
             font_size=14,
@@ -134,6 +134,7 @@ class SheetMusicScreen(MDScreen):
         name_btn.bind(on_release=lambda inst, eid=entry["id"]: self._show_notes_dialog(eid))
         row.add_widget(name_btn)
 
+        # Dugme za pregled nota (Oko)
         view_btn = MDIconButton(
             icon="eye-outline",
             theme_text_color="Custom",
@@ -144,6 +145,7 @@ class SheetMusicScreen(MDScreen):
         view_btn.bind(on_release=lambda inst, eid=entry["id"]: self._show_notes_dialog(eid))
         row.add_widget(view_btn)
 
+        # Dugme za preimenovanje (Olovka)
         rename_btn = MDIconButton(
             icon="pencil-outline",
             theme_text_color="Custom",
@@ -154,6 +156,7 @@ class SheetMusicScreen(MDScreen):
         rename_btn.bind(on_release=lambda inst, eid=entry["id"]: self._on_name_click(inst, eid))
         row.add_widget(rename_btn)
 
+        # Dugme za brisanje (Kanta)
         delete_btn = MDIconButton(
             icon="trash-can-outline",
             theme_text_color="Custom",
@@ -164,6 +167,7 @@ class SheetMusicScreen(MDScreen):
         delete_btn.bind(on_release=lambda inst, eid=entry["id"]: self._delete_entry(eid))
         row.add_widget(delete_btn)
 
+        # Dugme za PDF
         export_pdf_btn = MDIconButton(
             icon="file-pdf-box",
             theme_text_color="Custom",
@@ -174,6 +178,7 @@ class SheetMusicScreen(MDScreen):
         export_pdf_btn.bind(on_release=lambda inst, eid=entry["id"]: self._export_entry_pdf(eid))
         row.add_widget(export_pdf_btn)
 
+        # Dugme za MIDI
         export_midi_btn = MDIconButton(
             icon="music-note",
             theme_text_color="Custom",
@@ -192,35 +197,22 @@ class SheetMusicScreen(MDScreen):
         if not entry:
             return
 
-        # ISPRAVKA: fiksna visina za scroll, inače se lista "sažme" na 0
-        # i tekst se ne vidi.
-        dialog_height = dp(350)
-
         content = MDBoxLayout(
             orientation="vertical",
             spacing=dp(4),
             padding=[dp(8), dp(8)],
-            size_hint_y=None,
-            height=dialog_height,
+            adaptive_height=True,
         )
 
-        scroll = ScrollView(size_hint=(1, None), height=dialog_height)
+        scroll = ScrollView()
         notes_box = MDBoxLayout(
             orientation="vertical",
             adaptive_height=True,
             spacing=dp(2),
-            size_hint_y=None,
         )
-        notes_box.bind(minimum_height=notes_box.setter("height"))
 
         if not entry["notes"]:
-            notes_box.add_widget(
-                MDLabel(
-                    text="Nema nota u ovom zapisu.",
-                    size_hint_y=None,
-                    height=dp(30),
-                )
-            )
+            notes_box.add_widget(MDLabel(text="Nema nota u ovom zapisu."))
         else:
             for note in entry["notes"]:
                 note_text = "{}  {:.2f}s - {:.2f}s".format(
@@ -332,12 +324,11 @@ class SheetMusicScreen(MDScreen):
             export_notes_to_pdf(entry["notes"], tmp_path, title=entry["name"], clef=None)
 
             def _on_done(success, message):
-                # ISPRAVKA: sada vidljiva poruka na ekranu umesto print()
-                Snackbar(text=str(message)).open()
+                print("PDF export:", message)
 
             save_to_downloads(tmp_path, display_name, "application/pdf", _on_done)
         except Exception as e:
-            Snackbar(text="Greška pri PDF exportu: {}".format(e)).open()
+            print("Greška pri PDF exportu:", e)
 
     def _export_entry_midi(self, entry_id):
         entry = self._get_app().sheet_storage.get_entry(entry_id)
@@ -356,13 +347,20 @@ class SheetMusicScreen(MDScreen):
 
             export_notes_to_midi(entry["notes"], tmp_path)
 
+            # Sacuvaj trajnu kopiju u MIDI biblioteku (glavni ekran -> MIDI)
+            try:
+                app = self._get_app()
+                if hasattr(app, "midi_storage") and app.midi_storage is not None:
+                    app.midi_storage.add_entry(entry["name"], tmp_path)
+            except Exception as e:
+                print("Greška pri čuvanju u MIDI biblioteku:", e)
+
             def _on_done(success, message):
-                # ISPRAVKA: sada vidljiva poruka na ekranu umesto print()
-                Snackbar(text=str(message)).open()
+                print("MIDI export:", message)
 
             save_to_downloads(tmp_path, display_name, "audio/midi", _on_done)
         except Exception as e:
-            Snackbar(text="Greška pri MIDI exportu: {}".format(e)).open()
+            print("Greška pri MIDI exportu:", e)
 
     def _get_app_dir(self, subfolder):
         from jnius import autoclass
