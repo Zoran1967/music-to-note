@@ -1,0 +1,42 @@
+name: Cleanup Old Artifacts
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Delete old builds, keep last 3
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const artifacts = await github.paginate(
+              github.rest.actions.listArtifactsForRepo,
+              { owner, repo, per_page: 100 }
+            );
+
+            const groups = {};
+            for (const artifact of artifacts) {
+              if (!groups[artifact.name]) groups[artifact.name] = [];
+              groups[artifact.name].push(artifact);
+            }
+
+            for (const name in groups) {
+              const sorted = groups[name].sort(
+                (a, b) => new Date(b.created_at) - new Date(a.created_at)
+              );
+              const toDelete = sorted.slice(3);
+              for (const artifact of toDelete) {
+                console.log(`Brisem: ${artifact.name} id=${artifact.id} datum=${artifact.created_at}`);
+                await github.rest.actions.deleteArtifact({
+                  owner,
+                  repo,
+                  artifact_id: artifact.id
+                });
+              }
+            }
