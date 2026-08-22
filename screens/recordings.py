@@ -12,9 +12,13 @@ scoped-storage/permission headaches).
 Every risky step is wrapped in try/except and reported directly in the
 list (as a message row) rather than crashing, per project strategy.
 
-NOTE: Analiza je trenutno omogućena samo za WAV fajlove. MP3/M4A
-dekodiranje kroz MediaCodec se pokazalo nestabilnim na nekim uređajima
-i biće rešeno kasnije.
+NOTE: Analiza je omogućena za sve podržane formate (WAV, MP3, M4A,
+AAC, OGG, FLAC, MP4). Ne-WAV fajlovi se prvo konvertuju u privremeni
+WAV preko transcription.media_decode (Android MediaCodec), pa se tek
+onda analiziraju istim pipeline-om kao WAV. Konverzija je i dalje
+osetljiva na uredjaj (MediaCodec ume da se ponasa razlicito na
+razlicitim proizvodjacima), zato je sav taj korak obavijen u
+try/except i javlja gresku umesto da rusi aplikaciju.
 """
 
 import os
@@ -69,7 +73,7 @@ class RecordingsScreen(MDScreen):
             entries += self._collect(_app_dir("recordings"), (".wav",), "Snimljeno")
             entries += self._collect(
                 _app_dir("imported"),
-                (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"),
+                (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".mp4"),
                 "Ucitano",
             )
             entries.sort(key=lambda e: e[2], reverse=True)  # newest first
@@ -99,15 +103,13 @@ class RecordingsScreen(MDScreen):
 
     def _add_row(self, container, fname, full_path, label):
         size_kb = os.path.getsize(full_path) // 1024
-        # Privremeno: samo WAV podržan za analizu (MediaCodec nije stabilan)
-        can_analyze = fname.lower().endswith(".wav")
+        can_analyze = fname.lower().endswith(
+            (".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".mp4")
+        )
 
         row = Factory.RecordingRow()
         row.filename = fname
-        if label == "Ucitano" and not can_analyze:
-            row.subtitle = "{} \u2014 {} KB (samo WAV analiza)".format(label, size_kb)
-        else:
-            row.subtitle = "{} \u2014 {} KB".format(label, size_kb)
+        row.subtitle = "{} \u2014 {} KB".format(label, size_kb)
         row.can_analyze = can_analyze
 
         row.ids.play_btn.bind(
@@ -184,10 +186,51 @@ class RecordingsScreen(MDScreen):
 
     # -- FAZA 3: Analysis --------------------------------------------------
     def analyze_recording(self, path, row_widget):
-        row_widget.subtitle = "Analiziram... 0%"
-        Clock.schedule_once(
-            lambda dt: self._analyze_wav(path, row_widget), 0
+        if path.lower().endswith(".wav"):
+            row_widget.subtitle = "Analiziram... 0%"
+            Clock.schedule_once(
+                lambda dt: self._analyze_wav(path, row_widget), 0
+            )
+        else:
+            row_widget.subtitle = "Konvertujem... 0%"
+            Clock.schedule_once(
+                lambda dt: self._convert_then_analyze(path, row_widget), 0
+            )
+
+    def _convert_then_analyze(self, path, row_widget):
+        try:
+            from transcription.media_decode import decode_to_wav
+        except Exception as e:
+            row_widget.subtitle = "Greska pri konverziji: {}".format(e)
+            return
+
+        tmp_dir = _app_dir("tmp_analysis")
+        try:
+            os.makedirs(tmp_dir, exist_ok=True)
+        except Exception as e:
+            row_widget.subtitle = "Greska pri konverziji: {}".format(e)
+            return
+
+        base = os.path.splitext(os.path.basename(path))[0]
+        tmp_wav = os.path.join(tmp_dir, "{}_conv.wav".format(base))
+
+        def _on_progress(fraction):
+            row_widget.subtitle = "Konvertujem... {}%".format(int(fraction * 100))
+
+        def _on_done(success, message):
+            if not success:
+                row_widget.subtitle = "Greska pri konverziji: {}".format(message)
+                return
+            row_widget.subtitle = "Analiziram... 0%"
+            Clock.schedule_once(
+                lambda dt: self._analyze_wav(tmp_wav, row_widget), 0
+            )
+
+        started = decode_to_wav(
+            path, tmp_wav, callback=_on_done, progress_callback=_on_progress
         )
+        if not started:
+            row_widget.subtitle = "Greska pri pokretanju konverzije"
 
     def _apply_transpose(self, notes):
         """Primeni transpoziciju iz podešavanja na listu nota."""
