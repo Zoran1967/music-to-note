@@ -133,13 +133,19 @@ class MidiScreen(MDScreen):
 
         title_label = MDLabel(
             text="{}. {}".format(index, entry["name"]),
-            font_size=15,
+            font_size="13sp",
             bold=True,
             theme_text_color="Custom",
             text_color=hex_to_rgba(COLORS["white"], 1),
             size_hint_y=None,
             height=dp(28),
             halign="left",
+            valign="middle",
+            shorten=True,
+            shorten_from="right",
+        )
+        title_label.bind(
+            width=lambda inst, val: setattr(inst, "text_size", (val, dp(28)))
         )
         row.add_widget(title_label)
 
