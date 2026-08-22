@@ -2,11 +2,21 @@
 """
 android_storage.py
 Čuvanje fajlova u Android Downloads folder.
-Ispravljeno sa IS_PENDING za Android 10+.
+Ispravljeno: koristi direktna imena kolona (stringove) umesto
+MediaStore.Downloads.* konstanti, jer pyjnius ume da ne pronađe
+polja nasleđena iz interfejsa (MediaColumns), što je izazivalo
+tihu grešku pri pravljenju fajla.
 """
 
 import os
 from kivy.utils import platform
+
+# Ovo su fiksna, standardna imena kolona u Android MediaStore bazi.
+# Nikad se ne menjaju, zato je bezbedno da ih upišemo direktno kao tekst.
+COL_DISPLAY_NAME = "_display_name"
+COL_MIME_TYPE = "mime_type"
+COL_RELATIVE_PATH = "relative_path"
+COL_IS_PENDING = "is_pending"
 
 
 def save_to_downloads(temp_path, display_name, mime_type, callback=None):
@@ -19,17 +29,18 @@ def save_to_downloads(temp_path, display_name, mime_type, callback=None):
 
             Environment = autoclass("android.os.Environment")
             ContentValues = autoclass("android.content.ContentValues")
-            MediaStore = autoclass("android.provider.MediaStore$Downloads")
+            MediaStoreDownloads = autoclass("android.provider.MediaStore$Downloads")
             FileInputStream = autoclass("java.io.FileInputStream")
 
             values = ContentValues()
-            values.put(MediaStore.DISPLAY_NAME, display_name)
-            values.put(MediaStore.MIME_TYPE, mime_type)
-            values.put(MediaStore.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-            # DODATO: Obavezno za Android 10+ da bi fajl bio vidljiv
-            values.put(MediaStore.IS_PENDING, 1)
+            values.put(COL_DISPLAY_NAME, display_name)
+            values.put(COL_MIME_TYPE, mime_type)
+            values.put(COL_RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            values.put(COL_IS_PENDING, 1)
 
-            uri = context.getContentResolver().insert(MediaStore.EXTERNAL_CONTENT_URI, values)
+            uri = context.getContentResolver().insert(
+                MediaStoreDownloads.EXTERNAL_CONTENT_URI, values
+            )
 
             if uri is not None:
                 input_stream = FileInputStream(temp_path)
@@ -46,30 +57,32 @@ def save_to_downloads(temp_path, display_name, mime_type, callback=None):
                 output_stream.close()
                 input_stream.close()
 
-                # DODATO: Finalizuj fajl (postavi IS_PENDING na 0)
                 update_values = ContentValues()
-                update_values.put(MediaStore.IS_PENDING, 0)
+                update_values.put(COL_IS_PENDING, 0)
                 context.getContentResolver().update(uri, update_values, None, None)
 
                 if callback:
-                    callback(True, "Fajl sačuvan u Downloads!")
+                    callback(True, "Fajl sačuvan u Downloads: {}".format(display_name))
             else:
                 if callback:
-                    callback(False, "Greška: Nije moguće napraviti fajl u Downloads.")
+                    callback(False, "Greška: insert() je vratio None (nije napravljen zapis u MediaStore).")
 
         else:
             downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
             os.makedirs(downloads_dir, exist_ok=True)
             dst_path = os.path.join(downloads_dir, display_name)
-            
+
             with open(temp_path, 'rb') as src, open(dst_path, 'wb') as dst:
                 dst.write(src.read())
 
             if callback:
-                callback(True, f"Fajl sačuvan na: {dst_path}")
+                callback(True, "Fajl sačuvan na: {}".format(dst_path))
 
     except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        print("STORAGE ERROR:", error_detail)
         if callback:
-            callback(False, f"Greška pri čuvanju: {e}")
+            callback(False, "Greška pri čuvanju: {}".format(e))
         else:
-            print(f"Greška pri čuvanju: {e}")
+            print("Greška pri čuvanju: {}".format(e))
