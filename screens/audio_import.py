@@ -106,7 +106,7 @@ class AudioImportScreen(MDScreen):
                 pass
 
             ext = os.path.splitext(display_name)[1].lower()
-            if ext not in (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"):
+            if ext not in (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".mp4"):
                 self.status_text = "Izaberi audio fajl (izabrano: {})".format(
                     display_name
                 )
