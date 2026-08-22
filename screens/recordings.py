@@ -427,6 +427,7 @@ class RecordingsScreen(MDScreen):
         try:
             from transcription.midi_export import export_notes_to_midi
             from android_storage import save_to_downloads
+            from kivy.app import App
 
             base = os.path.splitext(os.path.basename(source_path))[0]
             display_name = "{}_note.mid".format(base)
@@ -436,6 +437,15 @@ class RecordingsScreen(MDScreen):
             tmp_path = os.path.join(tmp_dir, display_name)
 
             export_notes_to_midi(notes, tmp_path)
+
+            # Sacuvaj trajnu kopiju u MIDI biblioteku (glavni ekran -> MIDI)
+            try:
+                app = App.get_running_app()
+                if hasattr(app, "midi_storage") and app.midi_storage is not None:
+                    app.midi_storage.add_entry(base, tmp_path)
+            except Exception as e:
+                print("Greska pri cuvanju u MIDI biblioteku:", e)
+
             status_label.text = "Cuvam u Download..."
 
             def _on_done(success, message):
