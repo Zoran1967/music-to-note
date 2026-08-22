@@ -1,52 +1,74 @@
 name: Build Android APK
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 env:
   PIP_CONSTRAINT: ${{ github.workspace }}/pip-constraints.txt
-
 jobs:
-  build:
+  syntax-check:
     runs-on: ubuntu-22.04
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Check Python syntax
+        run: |
+          find . -name "*.py" -exec python3 -m py_compile {} \;
+      - name: Check referenced assets exist
+        run: |
+          grep -roP "(?<=source: ')[^']+\.(png|ttf|kv)" . 2>/dev/null | while read f; do
+            [ -f "$f" ] || echo "UPOZORENJE: fajl ne postoji: $f"
+          done
 
+  build:
+    needs: syntax-check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
       - name: Pin a stable pip version everywhere
         run: echo "pip==24.0" > pip-constraints.txt
-
       - name: Install system dependencies
         run: |
           sudo apt update
           sudo apt install -y git zip unzip openjdk-17-jdk python3-pip \
             autoconf libtool pkg-config zlib1g-dev libncurses5-dev \
             libncursesw5-dev cmake libffi-dev libssl-dev build-essential
-
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            ~/.gradle
+          key: buildozer-${{ hashFiles('buildozer.spec') }}
       - name: Install buildozer and cython
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install buildozer cython==0.29.33
-
       - name: Build APK with buildozer
         run: |
-          yes | buildozer android debug
-
+          yes | buildozer android debug 2>&1 | tee build_log.txt
+      - name: Upload log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build_log.txt
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: music-to-note-apk
